@@ -16,6 +16,7 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { useAuth } from "@/lib/auth-context";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, MapPin, FolderOpen, Search } from "lucide-react";
+import { SectorIcon } from "@/components/shared/SectorIcon";
 
 interface Project {
   id: string;
@@ -44,6 +45,7 @@ interface Country {
 interface Sector {
   key: string;
   name: string;
+  icon: string;
   color: string;
 }
 
@@ -213,7 +215,8 @@ export default function ProjectsPage() {
   );
 
   const getCountryName = (code: string) => countries.find((c) => c.code === code)?.name || code;
-  const getSectorName = (key: string) => sectors.find((s) => s.key === key)?.name || key;
+  const getSector = (key: string) => sectors.find((s) => s.key === key);
+  const getSectorName = (key: string) => getSector(key)?.name || key;
 
   return (
     <div data-design-id="projects-page" className="p-8">
@@ -311,7 +314,16 @@ export default function ProjectsPage() {
                         {getCountryName(project.countryCode)}
                       </div>
                     </TableCell>
-                    <TableCell>{getSectorName(project.sectorKey)}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <SectorIcon 
+                          iconKey={getSector(project.sectorKey)?.icon} 
+                          color={getSector(project.sectorKey)?.color} 
+                          size="sm" 
+                        />
+                        {getSectorName(project.sectorKey)}
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <Badge
                         variant="outline"
@@ -441,7 +453,10 @@ export default function ProjectsPage() {
                     <SelectContent>
                       {sectors.map((sector) => (
                         <SelectItem key={sector.key} value={sector.key}>
-                          {sector.name}
+                          <div className="flex items-center gap-2">
+                            <SectorIcon iconKey={sector.icon} color={sector.color} size="xs" />
+                            <span>{sector.name}</span>
+                          </div>
                         </SelectItem>
                       ))}
                     </SelectContent>

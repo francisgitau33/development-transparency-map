@@ -2,42 +2,26 @@
 
 import { useEffect, useState } from "react";
 
-interface ProjectMarker {
+interface Project {
   id: string;
+  title: string;
+  latitude: number;
+  longitude: number;
+  sectorKey: string;
+}
+
+interface Sector {
+  key: string;
   name: string;
-  lat: number;
-  lng: number;
-  sector: string;
   color: string;
 }
 
-const sampleProjects: ProjectMarker[] = [
-  { id: "1", name: "Solar Farm Initiative", lat: 9.082, lng: 8.675, sector: "Energy", color: "#fbbf24" },
-  { id: "2", name: "Clean Water Access", lat: -1.286, lng: 36.817, sector: "Water", color: "#38bdf8" },
-  { id: "3", name: "Rural Education Center", lat: 14.497, lng: -14.452, sector: "Education", color: "#a78bfa" },
-  { id: "4", name: "Agricultural Training", lat: -6.369, lng: 34.888, sector: "Agriculture", color: "#4ade80" },
-  { id: "5", name: "Healthcare Clinic", lat: 6.524, lng: 3.379, sector: "Health", color: "#f87171" },
-  { id: "6", name: "Infrastructure Development", lat: 12.639, lng: -8.002, sector: "Infrastructure", color: "#94a3b8" },
-  { id: "7", name: "Women Empowerment Hub", lat: 5.614, lng: -0.205, sector: "Social", color: "#fb7185" },
-  { id: "8", name: "Tech Training Center", lat: -4.325, lng: 15.322, sector: "Technology", color: "#60a5fa" },
-  { id: "9", name: "Sustainable Forestry", lat: -15.416, lng: 28.283, sector: "Environment", color: "#22c55e" },
-  { id: "10", name: "Microfinance Project", lat: 15.508, lng: 32.559, sector: "Finance", color: "#f59e0b" },
-  { id: "11", name: "Youth Skills Training", lat: 0.347, lng: 32.582, sector: "Education", color: "#a78bfa" },
-  { id: "12", name: "Solar Irrigation", lat: 13.756, lng: 2.128, sector: "Energy", color: "#fbbf24" },
-  { id: "13", name: "Community Health", lat: -18.879, lng: 47.507, sector: "Health", color: "#f87171" },
-  { id: "14", name: "Road Construction", lat: 7.946, lng: -1.023, sector: "Infrastructure", color: "#94a3b8" },
-  { id: "15", name: "Water Treatment Plant", lat: -25.746, lng: 28.188, sector: "Water", color: "#38bdf8" },
-  { id: "16", name: "Agricultural Coop", lat: 11.588, lng: 37.392, sector: "Agriculture", color: "#4ade80" },
-  { id: "17", name: "Digital Literacy", lat: -19.015, lng: 29.155, sector: "Technology", color: "#60a5fa" },
-  { id: "18", name: "Reforestation Project", lat: -3.373, lng: 29.363, sector: "Environment", color: "#22c55e" },
-  { id: "19", name: "Hospital Expansion", lat: 8.985, lng: 38.798, sector: "Health", color: "#f87171" },
-  { id: "20", name: "School Construction", lat: 1.957, lng: 30.104, sector: "Education", color: "#a78bfa" },
-  { id: "21", name: "Renewable Energy", lat: -13.254, lng: 34.301, sector: "Energy", color: "#fbbf24" },
-  { id: "22", name: "Well Drilling", lat: 12.865, lng: -8.000, sector: "Water", color: "#38bdf8" },
-  { id: "23", name: "Farm Equipment", lat: -20.142, lng: 28.580, sector: "Agriculture", color: "#4ade80" },
-  { id: "24", name: "Bridge Building", lat: 4.861, lng: 31.571, sector: "Infrastructure", color: "#94a3b8" },
-  { id: "25", name: "Vocational Training", lat: -11.202, lng: 17.873, sector: "Education", color: "#a78bfa" },
-];
+interface ProjectMarker {
+  id: string;
+  lat: number;
+  lng: number;
+  color: string;
+}
 
 function latLngToXY(lat: number, lng: number, width: number, height: number) {
   const x = ((lng + 180) / 360) * width;
@@ -45,11 +29,59 @@ function latLngToXY(lat: number, lng: number, width: number, height: number) {
   return { x, y };
 }
 
+// Fallback placeholder markers for when no data is available
+const fallbackMarkers: ProjectMarker[] = [
+  { id: "1", lat: 9.082, lng: 8.675, color: "#0ea5e9" },
+  { id: "2", lat: -1.286, lng: 36.817, color: "#0ea5e9" },
+  { id: "3", lat: 14.497, lng: -14.452, color: "#0ea5e9" },
+  { id: "4", lat: -6.369, lng: 34.888, color: "#0ea5e9" },
+  { id: "5", lat: 6.524, lng: 3.379, color: "#0ea5e9" },
+];
+
 export function HeroMapBackground() {
   const [mounted, setMounted] = useState(false);
+  const [markers, setMarkers] = useState<ProjectMarker[]>(fallbackMarkers);
 
   useEffect(() => {
     setMounted(true);
+    
+    // Fetch real projects and sectors
+    const fetchData = async () => {
+      try {
+        const [projectsRes, sectorsRes] = await Promise.all([
+          fetch("/api/projects?forMap=true"),
+          fetch("/api/reference/sectors?activeOnly=true"),
+        ]);
+        
+        if (projectsRes.ok && sectorsRes.ok) {
+          const [projectsData, sectorsData] = await Promise.all([
+            projectsRes.json(),
+            sectorsRes.json(),
+          ]);
+          
+          const sectors: Sector[] = sectorsData.sectors || [];
+          const projects: Project[] = projectsData.projects || [];
+          
+          const sectorColorMap = new Map(sectors.map(s => [s.key, s.color]));
+          
+          const projectMarkers: ProjectMarker[] = projects.slice(0, 50).map(p => ({
+            id: p.id,
+            lat: p.latitude,
+            lng: p.longitude,
+            color: sectorColorMap.get(p.sectorKey) || "#0ea5e9",
+          }));
+          
+          if (projectMarkers.length > 0) {
+            setMarkers(projectMarkers);
+          }
+        }
+      } catch (error) {
+        // Keep fallback markers on error
+        console.log("Using fallback markers for hero background");
+      }
+    };
+    
+    fetchData();
   }, []);
 
   const width = 1200;
@@ -139,12 +171,12 @@ export function HeroMapBackground() {
 
         {mounted && (
           <g data-design-id="hero-map-markers" filter="url(#glow)">
-            {sampleProjects.map((project, index) => {
-              const { x, y } = latLngToXY(project.lat, project.lng, width, height);
+            {markers.map((marker, index) => {
+              const { x, y } = latLngToXY(marker.lat, marker.lng, width, height);
               return (
                 <g
-                  key={project.id}
-                  data-design-id={`hero-map-marker-${project.id}`}
+                  key={marker.id}
+                  data-design-id={`hero-map-marker-${index}`}
                   className="animate-pulse"
                   style={{
                     animationDelay: `${index * 0.15}s`,
@@ -152,19 +184,19 @@ export function HeroMapBackground() {
                   }}
                 >
                   <circle
-                    data-design-id={`hero-map-marker-outer-${project.id}`}
+                    data-design-id={`hero-map-marker-outer-${index}`}
                     cx={x}
                     cy={y}
                     r="12"
-                    fill={project.color}
+                    fill={marker.color}
                     fillOpacity="0.2"
                   />
                   <circle
-                    data-design-id={`hero-map-marker-inner-${project.id}`}
+                    data-design-id={`hero-map-marker-inner-${index}`}
                     cx={x}
                     cy={y}
                     r="5"
-                    fill={project.color}
+                    fill={marker.color}
                     fillOpacity="0.8"
                   />
                 </g>

@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { X, Filter, MapPin, Building2, Layers } from "lucide-react";
+import { X, Filter, MapPin, Building2, Layers, AlertCircle } from "lucide-react";
+import { SectorIcon, SectorLegendItem } from "@/components/shared/SectorIcon";
 
 const MapComponent = dynamic(
   () => import("@/components/public/MapComponent").then((mod) => mod.MapComponent),
@@ -162,14 +163,17 @@ export default function MapPage() {
             </Select>
 
             <Select value={sectorFilter} onValueChange={setSectorFilter}>
-              <SelectTrigger data-design-id="map-filter-sector" className="w-[160px]">
+              <SelectTrigger data-design-id="map-filter-sector" className="w-[180px]">
                 <SelectValue placeholder="All Sectors" />
               </SelectTrigger>
               <SelectContent className="z-[1100]">
                 <SelectItem value="_all">All Sectors</SelectItem>
                 {sectors.map((sector) => (
                   <SelectItem key={sector.key} value={sector.key}>
-                    {sector.name}
+                    <div className="flex items-center gap-2">
+                      <SectorIcon iconKey={sector.icon} color={sector.color} size="xs" />
+                      <span>{sector.name}</span>
+                    </div>
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -265,21 +269,22 @@ export default function MapPage() {
               data-design-id="map-legend-items"
               className="space-y-2"
             >
-              {sectors.map((sector) => (
-                <div
-                  key={sector.key}
-                  data-design-id={`map-legend-item-${sector.key.toLowerCase()}`}
-                  className="flex items-center text-sm"
-                >
-                  <div
-                    className="w-4 h-4 rounded-full mr-2 flex-shrink-0"
-                    style={{ backgroundColor: sector.color }}
-                  />
-                  <span className="text-slate-700">{sector.name}</span>
+              {error && sectors.length === 0 ? (
+                <div className="flex items-center gap-2 text-sm text-amber-600">
+                  <AlertCircle className="w-4 h-4" />
+                  <span>Sector data unavailable</span>
                 </div>
-              ))}
-              {sectors.length === 0 && (
+              ) : sectors.length === 0 ? (
                 <p className="text-sm text-slate-500">No sectors available</p>
+              ) : (
+                sectors.map((sector) => (
+                  <SectorLegendItem
+                    key={sector.key}
+                    iconKey={sector.icon}
+                    name={sector.name}
+                    color={sector.color}
+                  />
+                ))
               )}
             </div>
           </Card>

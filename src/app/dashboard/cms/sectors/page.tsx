@@ -11,11 +11,14 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { LoadingState } from "@/components/shared/LoadingState";
 import { ErrorState } from "@/components/shared/ErrorState";
+import { SectorIcon } from "@/components/shared/SectorIcon";
+import { availableIconKeys, formatIconKeyForDisplay } from "@/lib/icons/sector-icons";
 import { useAuth } from "@/lib/auth-context";
 import { toast } from "sonner";
-import { Plus, ArrowLeft, Pencil, Layers, Search } from "lucide-react";
+import { Plus, ArrowLeft, Pencil, Search } from "lucide-react";
 
 interface Sector {
   key: string;
@@ -228,12 +231,16 @@ export default function SectorsCMSPage() {
                     </TableCell>
                     <TableCell className="font-mono">{sector.key}</TableCell>
                     <TableCell>
-                      <div className="flex items-center">
-                        <Layers className="w-4 h-4 text-slate-400 mr-2" />
+                      <div className="flex items-center gap-2">
+                        <SectorIcon iconKey={sector.icon} color={sector.color} size="sm" />
                         {sector.name}
                       </div>
                     </TableCell>
-                    <TableCell>{sector.icon}</TableCell>
+                    <TableCell>
+                      <code className="text-xs bg-slate-100 px-2 py-1 rounded">
+                        {sector.icon}
+                      </code>
+                    </TableCell>
                     <TableCell>{sector.sortOrder}</TableCell>
                     <TableCell>
                       <Badge
@@ -306,14 +313,29 @@ export default function SectorsCMSPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
                   <Label htmlFor="icon">Icon *</Label>
-                  <Input
-                    id="icon"
+                  <Select
                     value={formData.icon}
-                    onChange={(e) => setFormData({ ...formData, icon: e.target.value })}
-                    required
-                    placeholder="heart"
-                  />
-                  <p className="text-xs text-slate-500">Lucide icon name (e.g., heart, book, building)</p>
+                    onValueChange={(value) => setFormData({ ...formData, icon: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select an icon">
+                        <div className="flex items-center gap-2">
+                          <SectorIcon iconKey={formData.icon} size="sm" />
+                          <span>{formatIconKeyForDisplay(formData.icon)}</span>
+                        </div>
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent className="max-h-[300px]">
+                      {availableIconKeys.map((iconKey) => (
+                        <SelectItem key={iconKey} value={iconKey}>
+                          <div className="flex items-center gap-2">
+                            <SectorIcon iconKey={iconKey} size="sm" />
+                            <span>{formatIconKeyForDisplay(iconKey)}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="color">Color *</Label>
@@ -331,6 +353,23 @@ export default function SectorsCMSPage() {
                       placeholder="#10b981"
                       className="flex-1"
                     />
+                  </div>
+                </div>
+              </div>
+
+              {/* Preview */}
+              <div className="border rounded-lg p-4 bg-slate-50">
+                <Label className="text-xs text-slate-500 mb-2 block">Preview</Label>
+                <div className="flex items-center gap-3">
+                  <div
+                    className="w-10 h-10 rounded-full flex items-center justify-center"
+                    style={{ backgroundColor: formData.color }}
+                  >
+                    <SectorIcon iconKey={formData.icon} color="#ffffff" size="md" />
+                  </div>
+                  <div>
+                    <div className="font-medium">{formData.name || "Sector Name"}</div>
+                    <code className="text-xs text-slate-500">{formData.key || "KEY"}</code>
                   </div>
                 </div>
               </div>
