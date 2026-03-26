@@ -1,0 +1,103 @@
+import { PrismaClient } from "@prisma/client";
+
+const prisma = new PrismaClient();
+
+async function main() {
+  console.log("Seeding database...");
+
+  // Seed reference countries
+  const countries = [
+    { code: "US", name: "United States", type: "COUNTRY" as const, sortOrder: 1 },
+    { code: "GB", name: "United Kingdom", type: "COUNTRY" as const, sortOrder: 2 },
+    { code: "KE", name: "Kenya", type: "COUNTRY" as const, sortOrder: 3 },
+    { code: "NG", name: "Nigeria", type: "COUNTRY" as const, sortOrder: 4 },
+    { code: "IN", name: "India", type: "COUNTRY" as const, sortOrder: 5 },
+    { code: "BD", name: "Bangladesh", type: "COUNTRY" as const, sortOrder: 6 },
+    { code: "PH", name: "Philippines", type: "COUNTRY" as const, sortOrder: 7 },
+    { code: "BR", name: "Brazil", type: "COUNTRY" as const, sortOrder: 8 },
+    { code: "MX", name: "Mexico", type: "COUNTRY" as const, sortOrder: 9 },
+    { code: "ZA", name: "South Africa", type: "COUNTRY" as const, sortOrder: 10 },
+    { code: "ET", name: "Ethiopia", type: "COUNTRY" as const, sortOrder: 11 },
+    { code: "GH", name: "Ghana", type: "COUNTRY" as const, sortOrder: 12 },
+    { code: "UG", name: "Uganda", type: "COUNTRY" as const, sortOrder: 13 },
+    { code: "TZ", name: "Tanzania", type: "COUNTRY" as const, sortOrder: 14 },
+    { code: "RW", name: "Rwanda", type: "COUNTRY" as const, sortOrder: 15 },
+    { code: "NP", name: "Nepal", type: "COUNTRY" as const, sortOrder: 16 },
+    { code: "MM", name: "Myanmar", type: "COUNTRY" as const, sortOrder: 17 },
+    { code: "VN", name: "Vietnam", type: "COUNTRY" as const, sortOrder: 18 },
+    { code: "ID", name: "Indonesia", type: "COUNTRY" as const, sortOrder: 19 },
+    { code: "PK", name: "Pakistan", type: "COUNTRY" as const, sortOrder: 20 },
+  ];
+
+  for (const country of countries) {
+    await prisma.referenceCountry.upsert({
+      where: { code: country.code },
+      update: {},
+      create: country,
+    });
+  }
+  console.log(`Seeded ${countries.length} countries`);
+
+  // Seed reference sectors
+  const sectors = [
+    { key: "HEALTH", name: "Health", icon: "heart", color: "#ef4444", sortOrder: 1 },
+    { key: "EDUCATION", name: "Education", icon: "book-open", color: "#3b82f6", sortOrder: 2 },
+    { key: "WASH", name: "Water & Sanitation", icon: "droplet", color: "#06b6d4", sortOrder: 3 },
+    { key: "AGRICULTURE", name: "Agriculture", icon: "wheat", color: "#22c55e", sortOrder: 4 },
+    { key: "INFRASTRUCTURE", name: "Infrastructure", icon: "building-2", color: "#6b7280", sortOrder: 5 },
+    { key: "ENERGY", name: "Energy", icon: "zap", color: "#f59e0b", sortOrder: 6 },
+    { key: "ENVIRONMENT", name: "Environment", icon: "leaf", color: "#10b981", sortOrder: 7 },
+    { key: "GOVERNANCE", name: "Governance", icon: "landmark", color: "#8b5cf6", sortOrder: 8 },
+    { key: "HUMANITARIAN", name: "Humanitarian Aid", icon: "heart-handshake", color: "#ec4899", sortOrder: 9 },
+    { key: "ECONOMIC", name: "Economic Development", icon: "trending-up", color: "#14b8a6", sortOrder: 10 },
+  ];
+
+  for (const sector of sectors) {
+    await prisma.referenceSector.upsert({
+      where: { key: sector.key },
+      update: {},
+      create: sector,
+    });
+  }
+  console.log(`Seeded ${sectors.length} sectors`);
+
+  // Seed default CMS about content
+  const existingAbout = await prisma.cmsAbout.findFirst();
+  if (!existingAbout) {
+    await prisma.cmsAbout.create({
+      data: {
+        title: "About Map My Development Data",
+        subtitle: "Promoting Transparency in Development",
+        bodySections: [
+          {
+            type: "text",
+            content:
+              "Map My Development Data is a public platform that visualizes development projects worldwide, enabling transparency and accountability in the development sector.",
+          },
+          {
+            type: "text",
+            content:
+              "Our mission is to make development data accessible to everyone, from researchers and policymakers to citizens and civil society organizations.",
+          },
+          {
+            type: "text",
+            content:
+              "The platform allows approved partner organizations to contribute, manage, and update project information through a secure dashboard, ensuring data accuracy and governance.",
+          },
+        ],
+      },
+    });
+    console.log("Seeded default CMS about content");
+  }
+
+  console.log("Seeding completed!");
+}
+
+main()
+  .catch((e) => {
+    console.error(e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

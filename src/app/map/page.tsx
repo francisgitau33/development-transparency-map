@@ -1,0 +1,327 @@
+"use client";
+
+import { useEffect, useState, useMemo } from "react";
+import dynamic from "next/dynamic";
+import { PublicLayout } from "@/components/public/PublicLayout";
+import { LoadingState } from "@/components/shared/LoadingState";
+import { ErrorState } from "@/components/shared/ErrorState";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import { X, Filter, MapPin, Building2, Layers } from "lucide-react";
+
+const MapComponent = dynamic(
+  () => import("@/components/public/MapComponent").then((mod) => mod.MapComponent),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="w-full h-full flex items-center justify-center bg-slate-100">
+        <LoadingState message="Loading map..." />
+      </div>
+    ),
+  }
+);
+
+interface Project {
+  id: string;
+  title: string;
+  description: string;
+  latitude: number;
+  longitude: number;
+  countryCode: string;
+  sectorKey: string;
+  status: string;
+  locationName: string | null;
+  organization: {
+    id: string;
+    name: string;
+    type: string;
+  };
+}
+
+interface Country {
+  code: string;
+  name: string;
+}
+
+interface Sector {
+  key: string;
+  name: string;
+  icon: string;
+  color: string;
+}
+
+export default function MapPage() {
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [countries, setCountries] = useState<Country[]>([]);
+  const [sectors, setSectors] = useState<Sector[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const [countryFilter, setCountryFilter] = useState<string>("");
+  const [sectorFilter, setSectorFilter] = useState<string>("");
+  const [statusFilter, setStatusFilter] = useState<string>("");
+  const [orgTypeFilter, setOrgTypeFilter] = useState<string>("");
+
+  const fetchData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [projectsRes, countriesRes, sectorsRes] = await Promise.all([
+        fetch("/api/projects?forMap=true"),
+        fetch("/api/reference/countries?activeOnly=true"),
+        fetch("/api/reference/sectors?activeOnly=true"),
+      ]);
+
+      if (!projectsRes.ok || !countriesRes.ok || !sectorsRes.ok) {
+        throw new Error("Failed to load data");
+      }
+
+      const [projectsData, countriesData, sectorsData] = await Promise.all([
+        projectsRes.json(),
+        countriesRes.json(),
+        sectorsRes.json(),
+      ]);
+
+      setProjects(projectsData.projects || []);
+      setCountries(countriesData.countries || []);
+      setSectors(sectorsData.sectors || []);
+    } catch (err) {
+      setError("Unable to load map data. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const filteredProjects = useMemo(() => {
+    return projects.filter((project) => {
+      if (countryFilter && project.countryCode !== countryFilter) return false;
+      if (sectorFilter && project.sectorKey !== sectorFilter) return false;
+      if (statusFilter && project.status !== statusFilter) return false;
+      if (orgTypeFilter && project.organization.type !== orgTypeFilter) return false;
+      return true;
+    });
+  }, [projects, countryFilter, sectorFilter, statusFilter, orgTypeFilter]);
+
+  const clearFilters = () => {
+    setCountryFilter("");
+    setSectorFilter("");
+    setStatusFilter("");
+    setOrgTypeFilter("");
+  };
+
+  const hasFilters = countryFilter || sectorFilter || statusFilter || orgTypeFilter;
+
+  const stats = useMemo(() => {
+    const active = filteredProjects.filter((p) => p.status === "ACTIVE").length;
+    const planned = filteredProjects.filter((p) => p.status === "PLANNED").length;
+    const completed = filteredProjects.filter((p) => p.status === "COMPLETED").length;
+    const uniqueOrgs = new Set(filteredProjects.map((p) => p.organization.id)).size;
+    return { total: filteredProjects.length, active, planned, completed, uniqueOrgs };
+  }, [filteredProjects]);
+
+  return (
+    <PublicLayout fullHeight>
+      <div
+        data-design-id="map-page"
+        className="flex-1 flex flex-col"
+      >
+        <div
+          data-design-id="map-toolbar"
+          className="bg-white border-b border-slate-200 px-4 py-3"
+        >
+          <div
+            data-design-id="map-toolbar-container"
+            className="max-w-7xl mx-auto flex flex-wrap items-center gap-3"
+          >
+            <div
+              data-design-id="map-filter-icon"
+              className="flex items-center text-slate-700 font-medium"
+            >
+              <Filter className="w-4 h-4 mr-2" />
+              Filters
+            </div>
+
+            <Select value={countryFilter} onValueChange={setCountryFilter}>
+              <SelectTrigger data-design-id="map-filter-country" className="w-[160px]">
+                <SelectValue placeholder="All Countries" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">All Countries</SelectItem>
+                {countries.map((country) => (
+                  <SelectItem key={country.code} value={country.code}>
+                    {country.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={sectorFilter} onValueChange={setSectorFilter}>
+              <SelectTrigger data-design-id="map-filter-sector" className="w-[160px]">
+                <SelectValue placeholder="All Sectors" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">All Sectors</SelectItem>
+                {sectors.map((sector) => (
+                  <SelectItem key={sector.key} value={sector.key}>
+                    {sector.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger data-design-id="map-filter-status" className="w-[140px]">
+                <SelectValue placeholder="All Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">All Status</SelectItem>
+                <SelectItem value="ACTIVE">Active</SelectItem>
+                <SelectItem value="PLANNED">Planned</SelectItem>
+                <SelectItem value="COMPLETED">Completed</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={orgTypeFilter} onValueChange={setOrgTypeFilter}>
+              <SelectTrigger data-design-id="map-filter-orgtype" className="w-[160px]">
+                <SelectValue placeholder="All Org Types" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">All Org Types</SelectItem>
+                <SelectItem value="LNGO">Local NGO</SelectItem>
+                <SelectItem value="INGO">International NGO</SelectItem>
+                <SelectItem value="FOUNDATION">Foundation</SelectItem>
+                <SelectItem value="GOVERNMENT">Government</SelectItem>
+                <SelectItem value="OTHER">Other</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {hasFilters && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearFilters}
+                data-design-id="map-clear-filters"
+                className="text-slate-600"
+              >
+                <X className="w-4 h-4 mr-1" />
+                Clear
+              </Button>
+            )}
+
+            <div
+              data-design-id="map-stats"
+              className="ml-auto flex items-center gap-4 text-sm text-slate-600"
+            >
+              <span data-design-id="map-stats-projects" className="flex items-center">
+                <MapPin className="w-4 h-4 mr-1" />
+                {stats.total} Projects
+              </span>
+              <span data-design-id="map-stats-orgs" className="flex items-center">
+                <Building2 className="w-4 h-4 mr-1" />
+                {stats.uniqueOrgs} Organizations
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div
+          data-design-id="map-content"
+          className="flex-1 relative"
+        >
+          {loading && (
+            <div className="absolute inset-0 flex items-center justify-center bg-slate-100 z-10">
+              <LoadingState message="Loading map data..." />
+            </div>
+          )}
+
+          {error && (
+            <div className="absolute inset-0 flex items-center justify-center bg-slate-100 z-10">
+              <ErrorState message={error} onRetry={fetchData} />
+            </div>
+          )}
+
+          {!loading && !error && (
+            <MapComponent projects={filteredProjects} sectors={sectors} />
+          )}
+
+          <Card
+            data-design-id="map-legend"
+            className="absolute bottom-4 left-4 z-20 p-4 bg-white/95 backdrop-blur-sm max-w-xs"
+          >
+            <div
+              data-design-id="map-legend-header"
+              className="flex items-center mb-3 font-semibold text-slate-900"
+            >
+              <Layers className="w-4 h-4 mr-2" />
+              Legend
+            </div>
+            <div
+              data-design-id="map-legend-items"
+              className="space-y-2"
+            >
+              {sectors.map((sector) => (
+                <div
+                  key={sector.key}
+                  data-design-id={`map-legend-item-${sector.key.toLowerCase()}`}
+                  className="flex items-center text-sm"
+                >
+                  <div
+                    className="w-4 h-4 rounded-full mr-2 flex-shrink-0"
+                    style={{ backgroundColor: sector.color }}
+                  />
+                  <span className="text-slate-700">{sector.name}</span>
+                </div>
+              ))}
+              {sectors.length === 0 && (
+                <p className="text-sm text-slate-500">No sectors available</p>
+              )}
+            </div>
+          </Card>
+
+          <Card
+            data-design-id="map-summary"
+            className="absolute bottom-4 right-4 z-20 p-4 bg-white/95 backdrop-blur-sm"
+          >
+            <div
+              data-design-id="map-summary-header"
+              className="font-semibold text-slate-900 mb-3"
+            >
+              Summary
+            </div>
+            <div
+              data-design-id="map-summary-stats"
+              className="grid grid-cols-2 gap-3 text-sm"
+            >
+              <div data-design-id="map-summary-active">
+                <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
+                  Active: {stats.active}
+                </Badge>
+              </div>
+              <div data-design-id="map-summary-planned">
+                <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
+                  Planned: {stats.planned}
+                </Badge>
+              </div>
+              <div data-design-id="map-summary-completed">
+                <Badge variant="outline" className="bg-slate-50 text-slate-700 border-slate-200">
+                  Completed: {stats.completed}
+                </Badge>
+              </div>
+              <div data-design-id="map-summary-total">
+                <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                  Total: {stats.total}
+                </Badge>
+              </div>
+            </div>
+          </Card>
+        </div>
+      </div>
+    </PublicLayout>
+  );
+}

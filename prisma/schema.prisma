@@ -1,0 +1,189 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User profiles - core user data
+model User {
+  id             String   @id @default(cuid())
+  email          String   @unique
+  password       String
+  displayName    String?
+  organizationId String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization        Organization?        @relation(fields: [organizationId], references: [id])
+  role                Role?
+  pendingRequest      PendingAccessRequest?
+  createdProjects     Project[]            @relation("CreatedBy")
+  uploadJobs          UploadJob[]
+  cmsUpdates          CmsAbout[]           @relation("UpdatedBy")
+}
+
+// Roles - only SYSTEM_OWNER and PARTNER_ADMIN
+enum RoleType {
+  SYSTEM_OWNER
+  PARTNER_ADMIN
+}
+
+model Role {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  email          String
+  role           RoleType
+  organizationId String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id])
+}
+
+// Pending access requests
+enum RequestStatus {
+  PENDING
+  APPROVED
+  DECLINED
+}
+
+model PendingAccessRequest {
+  id               String        @id @default(cuid())
+  userId           String        @unique
+  email            String
+  displayName      String?
+  organizationName String?
+  requestedAt      DateTime      @default(now())
+  status           RequestStatus @default(PENDING)
+  notes            String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Organization types
+enum OrganizationType {
+  LNGO
+  INGO
+  FOUNDATION
+  GOVERNMENT
+  OTHER
+}
+
+model Organization {
+  id           String           @id @default(cuid())
+  name         String
+  type         OrganizationType
+  countryCode  String
+  website      String?
+  contactEmail String?
+  description  String?
+  active       Boolean          @default(true)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  users      User[]
+  roles      Role[]
+  projects   Project[]
+  uploadJobs UploadJob[]
+}
+
+// Project status
+enum ProjectStatus {
+  ACTIVE
+  PLANNED
+  COMPLETED
+}
+
+model Project {
+  id              String        @id @default(cuid())
+  title           String
+  description     String
+  organizationId  String
+  countryCode     String
+  adminArea1      String?
+  adminArea2      String?
+  sectorKey       String
+  status          ProjectStatus
+  startDate       DateTime
+  endDate         DateTime?
+  budgetUsd       Float?
+  latitude        Float
+  longitude       Float
+  locationName    String?
+  dataSource      String?
+  contactEmail    String?
+  createdByUserId String
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  createdBy    User         @relation("CreatedBy", fields: [createdByUserId], references: [id])
+}
+
+// Reference countries
+enum CountryType {
+  COUNTRY
+  TERRITORY
+}
+
+model ReferenceCountry {
+  code      String      @id
+  name      String
+  type      CountryType @default(COUNTRY)
+  active    Boolean     @default(true)
+  sortOrder Int         @default(0)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+}
+
+// Reference sectors
+model ReferenceSector {
+  key       String   @id
+  name      String
+  icon      String
+  color     String
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// CMS About page
+model CmsAbout {
+  id              String   @id @default(cuid())
+  title           String
+  subtitle        String?
+  bodySections    Json
+  updatedAt       DateTime @updatedAt
+  updatedByUserId String?
+
+  updatedBy User? @relation("UpdatedBy", fields: [updatedByUserId], references: [id])
+}
+
+// Upload jobs for bulk CSV
+enum UploadStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model UploadJob {
+  id               String       @id @default(cuid())
+  uploadedByUserId String
+  organizationId   String
+  uploadedAt       DateTime     @default(now())
+  status           UploadStatus @default(PENDING)
+  totalRows        Int          @default(0)
+  validRows        Int          @default(0)
+  invalidRows      Int          @default(0)
+  errorReport      Json?
+  fileName         String?
+
+  uploadedBy   User         @relation(fields: [uploadedByUserId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+}
