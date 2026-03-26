@@ -147,7 +147,7 @@ export default function AboutCMSPage() {
           <Button
             onClick={handleSave}
             disabled={saving}
-            className="bg-emerald-600 hover:bg-emerald-700"
+            className="bg-sky-600 hover:bg-sky-700"
             data-design-id="cms-about-save"
           >
             <Save className="w-4 h-4 mr-2" />
@@ -243,7 +243,7 @@ export default function AboutCMSPage() {
                   {title || "Title"}
                 </h2>
                 {subtitle && (
-                  <p className="text-lg text-emerald-600 mb-6">{subtitle}</p>
+                  <p className="text-lg text-sky-600 mb-6">{subtitle}</p>
                 )}
                 <div className="space-y-4">
                   {sections.map((section, index) => (

@@ -41,7 +41,7 @@ export default function PendingApprovalPage() {
           data-design-id="pending-loading"
           className="min-h-[calc(100vh-4rem)] flex items-center justify-center"
         >
-          <div className="w-8 h-8 border-4 border-emerald-200 border-t-emerald-600 rounded-full animate-spin" />
+          <div className="w-8 h-8 border-4 border-sky-200 border-t-sky-600 rounded-full animate-spin" />
         </div>
       </PublicLayout>
     );
@@ -115,7 +115,7 @@ export default function PendingApprovalPage() {
             data-design-id="pending-back-link"
             className="text-center mt-6 text-sm text-slate-600"
           >
-            <Link href="/" className="hover:text-emerald-600 transition-colors">
+            <Link href="/" className="hover:text-sky-600 transition-colors">
               ← Back to Home
             </Link>
           </p>

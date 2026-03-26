@@ -243,7 +243,7 @@ export default function UploadPage() {
 
                 <div
                   data-design-id="upload-dropzone"
-                  className="border-2 border-dashed border-slate-300 rounded-lg p-8 text-center hover:border-emerald-500 transition-colors"
+                  className="border-2 border-dashed border-slate-300 rounded-lg p-8 text-center hover:border-sky-500 transition-colors"
                 >
                   <FileSpreadsheet className="w-12 h-12 mx-auto text-slate-400 mb-4" />
                   <p className="text-slate-600 mb-2">
@@ -276,7 +276,7 @@ export default function UploadPage() {
                       <Button
                         onClick={handleUpload}
                         disabled={uploading}
-                        className="bg-emerald-600 hover:bg-emerald-700"
+                        className="bg-sky-600 hover:bg-sky-700"
                       >
                         {uploading ? "Uploading..." : "Upload Projects"}
                       </Button>
@@ -289,12 +289,12 @@ export default function UploadPage() {
                     <Alert
                       className={
                         uploadResult.invalidRows === 0
-                          ? "border-emerald-200 bg-emerald-50"
+                          ? "border-sky-200 bg-sky-50"
                           : "border-amber-200 bg-amber-50"
                       }
                     >
                       {uploadResult.invalidRows === 0 ? (
-                        <CheckCircle className="w-4 h-4 text-emerald-600" />
+                        <CheckCircle className="w-4 h-4 text-sky-600" />
                       ) : (
                         <AlertCircle className="w-4 h-4 text-amber-600" />
                       )}
@@ -413,7 +413,7 @@ export default function UploadPage() {
                             variant="outline"
                             className={
                               job.status === "COMPLETED"
-                                ? "bg-emerald-50 text-emerald-700"
+                                ? "bg-sky-50 text-sky-700"
                                 : job.status === "FAILED"
                                 ? "bg-red-50 text-red-700"
                                 : "bg-amber-50 text-amber-700"

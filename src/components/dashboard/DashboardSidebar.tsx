@@ -58,8 +58,8 @@ export function DashboardSidebar() {
             data-design-id="dashboard-logo-icon"
             className="flex items-center space-x-3"
           >
-            <div className="w-10 h-10 bg-emerald-500 rounded-lg flex items-center justify-center">
-              <Globe className="w-6 h-6 text-white" />
+            <div className="w-10 h-10 bg-sky-500 rounded-lg flex items-center justify-center">
+              <Globe data-design-id="dashboard-globe-icon" className="w-6 h-6 text-white" />
             </div>
             <div>
               <div
@@ -97,7 +97,7 @@ export function DashboardSidebar() {
                   className={cn(
                     "flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-colors duration-200",
                     isActive
-                      ? "bg-emerald-600 text-white"
+                      ? "bg-sky-500 text-white"
                       : "text-slate-300 hover:bg-slate-800 hover:text-white"
                   )}
                 >
@@ -120,7 +120,7 @@ export function DashboardSidebar() {
           className={cn(
             "flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-colors duration-200 mb-2",
             pathname === "/dashboard/account"
-              ? "bg-emerald-600 text-white"
+              ? "bg-sky-500 text-white"
               : "text-slate-300 hover:bg-slate-800 hover:text-white"
           )}
         >

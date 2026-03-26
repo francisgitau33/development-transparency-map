@@ -40,7 +40,7 @@ export function PublicHeader() {
                 key={item.href}
                 href={item.href}
                 data-design-id={`public-nav-${item.label.toLowerCase()}`}
-                className="text-slate-700 hover:text-emerald-600 font-medium transition-colors duration-200"
+                className="text-slate-700 hover:text-sky-600 font-medium transition-colors duration-200"
               >
                 {item.label}
               </Link>
@@ -56,7 +56,7 @@ export function PublicHeader() {
                 key={item.href}
                 href={item.href}
                 data-design-id={`public-nav-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
-                className="inline-flex items-center px-4 py-2 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 transition-colors duration-200"
+                className="inline-flex items-center px-4 py-2 bg-sky-500 text-white rounded-lg font-medium hover:bg-sky-600 transition-colors duration-200"
               >
                 {item.label}
               </Link>

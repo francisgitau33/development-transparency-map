@@ -232,7 +232,7 @@ export default function UsersPage() {
               <CardContent>
                 {pendingRequests.length === 0 ? (
                   <EmptyState
-                    icon={<CheckCircle className="w-8 h-8 text-emerald-500" />}
+                    icon={<CheckCircle className="w-8 h-8 text-sky-500" />}
                     title="No pending requests"
                     description="All access requests have been processed"
                   />
@@ -267,7 +267,7 @@ export default function UsersPage() {
                             <Button
                               size="sm"
                               onClick={() => openApproveDialog(request)}
-                              className="mr-2 bg-emerald-600 hover:bg-emerald-700"
+                              className="mr-2 bg-sky-600 hover:bg-sky-700"
                             >
                               <CheckCircle className="w-4 h-4 mr-1" />
                               Approve
@@ -414,7 +414,7 @@ export default function UsersPage() {
             <Button
               onClick={handleApprove}
               disabled={processing}
-              className="bg-emerald-600 hover:bg-emerald-700"
+              className="bg-sky-600 hover:bg-sky-700"
             >
               {processing ? "Approving..." : "Approve User"}
             </Button>

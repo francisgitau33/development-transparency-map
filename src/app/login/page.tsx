@@ -75,9 +75,9 @@ export default function LoginPage() {
           >
             <div
               data-design-id="login-logo"
-              className="inline-flex items-center justify-center w-16 h-16 bg-emerald-100 rounded-2xl mb-4"
+              className="inline-flex items-center justify-center w-16 h-16 bg-sky-100 rounded-2xl mb-4"
             >
-              <Globe className="w-8 h-8 text-emerald-600" />
+              <Globe className="w-8 h-8 text-sky-600" />
             </div>
             <h1
               data-design-id="login-title"
@@ -142,7 +142,7 @@ export default function LoginPage() {
                   <CardFooter data-design-id="login-footer">
                     <Button
                       type="submit"
-                      className="w-full bg-emerald-600 hover:bg-emerald-700"
+                      className="w-full bg-sky-600 hover:bg-sky-700"
                       disabled={loading}
                       data-design-id="login-submit"
                     >
@@ -214,7 +214,7 @@ export default function LoginPage() {
                   <CardFooter data-design-id="register-footer" className="flex flex-col space-y-4">
                     <Button
                       type="submit"
-                      className="w-full bg-emerald-600 hover:bg-emerald-700"
+                      className="w-full bg-sky-600 hover:bg-sky-700"
                       disabled={loading}
                       data-design-id="register-submit"
                     >
@@ -241,7 +241,7 @@ export default function LoginPage() {
             data-design-id="login-back-link"
             className="text-center mt-6 text-sm text-slate-600"
           >
-            <Link href="/" className="hover:text-emerald-600 transition-colors">
+            <Link href="/" className="hover:text-sky-600 transition-colors">
               ← Back to Home
             </Link>
           </p>

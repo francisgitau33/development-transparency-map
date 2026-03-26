@@ -169,7 +169,7 @@ export default function OrganizationsPage() {
           <Button
             onClick={() => setDialogOpen(true)}
             data-design-id="organizations-add-button"
-            className="bg-emerald-600 hover:bg-emerald-700"
+            className="bg-sky-600 hover:bg-sky-700"
           >
             <Plus className="w-4 h-4 mr-2" />
             New Organization
@@ -208,7 +208,7 @@ export default function OrganizationsPage() {
               description={isSystemOwner ? "Create your first organization to get started" : "No organizations available"}
               action={
                 isSystemOwner && (
-                  <Button onClick={() => setDialogOpen(true)} className="bg-emerald-600 hover:bg-emerald-700">
+                  <Button onClick={() => setDialogOpen(true)} className="bg-sky-600 hover:bg-sky-700">
                     <Plus className="w-4 h-4 mr-2" />
                     New Organization
                   </Button>
@@ -244,7 +244,7 @@ export default function OrganizationsPage() {
                               href={org.website}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-sm text-emerald-600 hover:underline flex items-center"
+                              className="text-sm text-sky-600 hover:underline flex items-center"
                             >
                               <ExternalLink className="w-3 h-3 mr-1" />
                               Website
@@ -274,7 +274,7 @@ export default function OrganizationsPage() {
                         variant="outline"
                         className={
                           org.active
-                            ? "bg-emerald-50 text-emerald-700"
+                            ? "bg-sky-50 text-sky-700"
                             : "bg-slate-50 text-slate-700"
                         }
                       >
@@ -397,7 +397,7 @@ export default function OrganizationsPage() {
               <Button
                 type="submit"
                 disabled={saving}
-                className="bg-emerald-600 hover:bg-emerald-700"
+                className="bg-sky-600 hover:bg-sky-700"
               >
                 {saving ? "Creating..." : "Create Organization"}
               </Button>

@@ -127,7 +127,7 @@ export default function ReportsPage() {
                 <CardTitle className="text-sm font-medium text-slate-600">
                   Total Projects
                 </CardTitle>
-                <FolderOpen className="w-5 h-5 text-emerald-600" />
+                <FolderOpen className="w-5 h-5 text-sky-600" />
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold text-slate-900">

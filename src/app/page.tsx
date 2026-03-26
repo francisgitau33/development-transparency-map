@@ -2,6 +2,7 @@ import Link from "next/link";
 import { PublicLayout } from "@/components/public/PublicLayout";
 import { Globe, MapPin, Users, BarChart3 } from "lucide-react";
 import { BRANDING } from "@/lib/branding";
+import { HeroMapBackground } from "@/components/home/HeroMapBackground";
 
 export default function HomePage() {
   return (
@@ -12,15 +13,10 @@ export default function HomePage() {
       >
         <div
           data-design-id="hero-background"
-          className="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-900"
+          className="absolute inset-0 bg-gradient-to-br from-slate-900 via-sky-950 to-slate-900"
         />
-        <div
-          data-design-id="hero-pattern"
-          className="absolute inset-0 opacity-20"
-          style={{
-            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%2310b981' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-          }}
-        />
+        
+        <HeroMapBackground />
         
         <div
           data-design-id="hero-content"
@@ -28,21 +24,21 @@ export default function HomePage() {
         >
           <div
             data-design-id="hero-icon-container"
-            className="inline-flex items-center justify-center w-20 h-20 bg-emerald-500/20 rounded-2xl mb-8"
+            className="inline-flex items-center justify-center w-20 h-20 bg-sky-500/20 rounded-2xl mb-8 backdrop-blur-sm"
           >
-            <Globe className="w-10 h-10 text-emerald-400" />
+            <Globe data-design-id="hero-globe-icon" className="w-10 h-10 text-sky-400" />
           </div>
           
           <h1
             data-design-id="hero-title"
-            className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight"
+            className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight drop-shadow-lg"
           >
             {BRANDING.tagline}
           </h1>
           
           <p
             data-design-id="hero-subtitle"
-            className="text-xl sm:text-2xl text-emerald-300 mb-4 font-medium"
+            className="text-xl sm:text-2xl text-sky-300 mb-4 font-medium"
           >
             {BRANDING.subtitle}
           </p>
@@ -57,9 +53,9 @@ export default function HomePage() {
           <Link
             href="/map"
             data-design-id="hero-cta"
-            className="inline-flex items-center px-8 py-4 bg-emerald-500 hover:bg-emerald-600 text-white text-lg font-semibold rounded-xl transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-emerald-500/30"
+            className="inline-flex items-center px-8 py-4 bg-sky-500 hover:bg-sky-600 text-white text-lg font-semibold rounded-xl transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-sky-500/30"
           >
-            <MapPin className="w-5 h-5 mr-2" />
+            <MapPin data-design-id="hero-cta-icon" className="w-5 h-5 mr-2" />
             Explore the Map
           </Link>
         </div>
@@ -97,13 +93,13 @@ export default function HomePage() {
           >
             <div
               data-design-id="feature-card-1"
-              className="bg-slate-50 rounded-2xl p-8 text-center hover:shadow-lg transition-shadow duration-300"
+              className="bg-sky-50 rounded-2xl p-8 text-center hover:shadow-lg transition-shadow duration-300"
             >
               <div
                 data-design-id="feature-card-1-icon"
-                className="inline-flex items-center justify-center w-14 h-14 bg-emerald-100 rounded-xl mb-6"
+                className="inline-flex items-center justify-center w-14 h-14 bg-sky-100 rounded-xl mb-6"
               >
-                <MapPin className="w-7 h-7 text-emerald-600" />
+                <MapPin data-design-id="feature-1-mappin-icon" className="w-7 h-7 text-sky-600" />
               </div>
               <h3
                 data-design-id="feature-card-1-title"
@@ -121,13 +117,13 @@ export default function HomePage() {
             
             <div
               data-design-id="feature-card-2"
-              className="bg-slate-50 rounded-2xl p-8 text-center hover:shadow-lg transition-shadow duration-300"
+              className="bg-sky-50 rounded-2xl p-8 text-center hover:shadow-lg transition-shadow duration-300"
             >
               <div
                 data-design-id="feature-card-2-icon"
-                className="inline-flex items-center justify-center w-14 h-14 bg-blue-100 rounded-xl mb-6"
+                className="inline-flex items-center justify-center w-14 h-14 bg-sky-100 rounded-xl mb-6"
               >
-                <Users className="w-7 h-7 text-blue-600" />
+                <Users data-design-id="feature-2-users-icon" className="w-7 h-7 text-sky-600" />
               </div>
               <h3
                 data-design-id="feature-card-2-title"
@@ -145,13 +141,13 @@ export default function HomePage() {
             
             <div
               data-design-id="feature-card-3"
-              className="bg-slate-50 rounded-2xl p-8 text-center hover:shadow-lg transition-shadow duration-300"
+              className="bg-sky-50 rounded-2xl p-8 text-center hover:shadow-lg transition-shadow duration-300"
             >
               <div
                 data-design-id="feature-card-3-icon"
-                className="inline-flex items-center justify-center w-14 h-14 bg-amber-100 rounded-xl mb-6"
+                className="inline-flex items-center justify-center w-14 h-14 bg-sky-100 rounded-xl mb-6"
               >
-                <BarChart3 className="w-7 h-7 text-amber-600" />
+                <BarChart3 data-design-id="feature-3-chart-icon" className="w-7 h-7 text-sky-600" />
               </div>
               <h3
                 data-design-id="feature-card-3-title"
@@ -180,9 +176,9 @@ export default function HomePage() {
         >
           <div
             data-design-id="footer-logo"
-            className="inline-flex items-center justify-center w-12 h-12 bg-emerald-500/20 rounded-xl mb-4"
+            className="inline-flex items-center justify-center w-12 h-12 bg-sky-500/20 rounded-xl mb-4"
           >
-            <Globe className="w-6 h-6 text-emerald-400" />
+            <Globe data-design-id="footer-globe-icon" className="w-6 h-6 text-sky-400" />
           </div>
           <p
             data-design-id="footer-brand"

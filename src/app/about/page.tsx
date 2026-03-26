@@ -45,7 +45,7 @@ export default function AboutPage() {
       >
         <div
           data-design-id="about-hero"
-          className="bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-900 py-20"
+          className="bg-gradient-to-br from-slate-900 via-slate-800 to-sky-900 py-20"
         >
           <div
             data-design-id="about-hero-container"
@@ -53,9 +53,9 @@ export default function AboutPage() {
           >
             <div
               data-design-id="about-hero-icon"
-              className="inline-flex items-center justify-center w-16 h-16 bg-emerald-500/20 rounded-2xl mb-6"
+              className="inline-flex items-center justify-center w-16 h-16 bg-sky-500/20 rounded-2xl mb-6"
             >
-              <Globe className="w-8 h-8 text-emerald-400" />
+              <Globe className="w-8 h-8 text-sky-400" />
             </div>
             {loading ? (
               <div data-design-id="about-hero-loading" className="h-20 animate-pulse bg-slate-700/50 rounded-lg max-w-lg mx-auto" />
@@ -70,7 +70,7 @@ export default function AboutPage() {
                 {content?.subtitle && (
                   <p
                     data-design-id="about-subtitle"
-                    className="text-xl text-emerald-300"
+                    className="text-xl text-sky-300"
                   >
                     {content.subtitle}
                   </p>

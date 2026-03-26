@@ -170,7 +170,7 @@ export default function CountriesCMSPage() {
         <Button
           onClick={() => openDialog()}
           data-design-id="cms-countries-add"
-          className="bg-emerald-600 hover:bg-emerald-700"
+          className="bg-sky-600 hover:bg-sky-700"
         >
           <Plus className="w-4 h-4 mr-2" />
           Add Country
@@ -232,7 +232,7 @@ export default function CountriesCMSPage() {
                         variant="outline"
                         className={
                           country.active
-                            ? "bg-emerald-50 text-emerald-700"
+                            ? "bg-sky-50 text-sky-700"
                             : "bg-slate-50 text-slate-700"
                         }
                       >
@@ -339,7 +339,7 @@ export default function CountriesCMSPage() {
               <Button
                 type="submit"
                 disabled={saving}
-                className="bg-emerald-600 hover:bg-emerald-700"
+                className="bg-sky-600 hover:bg-sky-700"
               >
                 {saving ? "Saving..." : editingCountry ? "Update" : "Create"}
               </Button>

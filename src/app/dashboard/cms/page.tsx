@@ -68,8 +68,8 @@ export default function CMSPage() {
 
         <Card data-design-id="cms-sectors-card" className="hover:shadow-lg transition-shadow">
           <CardHeader>
-            <div className="w-12 h-12 bg-emerald-100 rounded-lg flex items-center justify-center mb-4">
-              <Layers className="w-6 h-6 text-emerald-600" />
+            <div className="w-12 h-12 bg-sky-100 rounded-lg flex items-center justify-center mb-4">
+              <Layers className="w-6 h-6 text-sky-600" />
             </div>
             <CardTitle>Sectors</CardTitle>
             <CardDescription>

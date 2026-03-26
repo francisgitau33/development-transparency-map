@@ -238,7 +238,7 @@ export default function ProjectsPage() {
         <Button
           onClick={() => openDialog()}
           data-design-id="projects-add-button"
-          className="bg-emerald-600 hover:bg-emerald-700"
+          className="bg-sky-600 hover:bg-sky-700"
         >
           <Plus className="w-4 h-4 mr-2" />
           New Project
@@ -275,7 +275,7 @@ export default function ProjectsPage() {
               title="No projects found"
               description="Create your first project to get started"
               action={
-                <Button onClick={() => openDialog()} className="bg-emerald-600 hover:bg-emerald-700">
+                <Button onClick={() => openDialog()} className="bg-sky-600 hover:bg-sky-700">
                   <Plus className="w-4 h-4 mr-2" />
                   New Project
                 </Button>
@@ -317,7 +317,7 @@ export default function ProjectsPage() {
                         variant="outline"
                         className={
                           project.status === "ACTIVE"
-                            ? "bg-emerald-50 text-emerald-700"
+                            ? "bg-sky-50 text-sky-700"
                             : project.status === "PLANNED"
                             ? "bg-amber-50 text-amber-700"
                             : "bg-slate-50 text-slate-700"
@@ -548,7 +548,7 @@ export default function ProjectsPage() {
               <Button
                 type="submit"
                 disabled={saving}
-                className="bg-emerald-600 hover:bg-emerald-700"
+                className="bg-sky-600 hover:bg-sky-700"
               >
                 {saving ? "Saving..." : editingProject ? "Update Project" : "Create Project"}
               </Button>

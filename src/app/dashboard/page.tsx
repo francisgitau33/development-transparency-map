@@ -117,14 +117,14 @@ export default function DashboardPage() {
                 <CardTitle className="text-sm font-medium text-slate-600">
                   Total Projects
                 </CardTitle>
-                <FolderOpen className="w-5 h-5 text-emerald-600" />
+                <FolderOpen className="w-5 h-5 text-sky-600" />
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold text-slate-900">
                   {analytics.summary.totalProjects}
                 </div>
                 <div className="flex gap-2 mt-2">
-                  <Badge variant="outline" className="bg-emerald-50 text-emerald-700">
+                  <Badge variant="outline" className="bg-sky-50 text-sky-700">
                     {analytics.summary.activeProjects} Active
                   </Badge>
                   <Badge variant="outline" className="bg-amber-50 text-amber-700">
@@ -234,7 +234,7 @@ export default function DashboardPage() {
                             variant="outline"
                             className={
                               project.status === "ACTIVE"
-                                ? "bg-emerald-50 text-emerald-700"
+                                ? "bg-sky-50 text-sky-700"
                                 : project.status === "PLANNED"
                                 ? "bg-amber-50 text-amber-700"
                                 : "bg-slate-50 text-slate-700"

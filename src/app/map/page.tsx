@@ -299,7 +299,7 @@ export default function MapPage() {
               className="grid grid-cols-2 gap-3 text-sm"
             >
               <div data-design-id="map-summary-active">
-                <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
+                <Badge variant="outline" className="bg-sky-50 text-sky-700 border-sky-200">
                   Active: {stats.active}
                 </Badge>
               </div>

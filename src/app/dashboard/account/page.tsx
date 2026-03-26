@@ -88,7 +88,7 @@ export default function AccountPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div data-design-id="account-role" className="flex items-start">
-              <CheckCircle className="w-5 h-5 text-emerald-500 mr-3 mt-0.5" />
+              <CheckCircle className="w-5 h-5 text-sky-500 mr-3 mt-0.5" />
               <div>
                 <p className="text-sm text-slate-500">Role</p>
                 <Badge
@@ -119,10 +119,10 @@ export default function AccountPage() {
             <Separator />
 
             <div data-design-id="account-state" className="flex items-start">
-              <CheckCircle className="w-5 h-5 text-emerald-500 mr-3 mt-0.5" />
+              <CheckCircle className="w-5 h-5 text-sky-500 mr-3 mt-0.5" />
               <div>
                 <p className="text-sm text-slate-500">Access State</p>
-                <Badge variant="outline" className="bg-emerald-50 text-emerald-700 mt-1">
+                <Badge variant="outline" className="bg-sky-50 text-sky-700 mt-1">
                   Approved
                 </Badge>
               </div>
