@@ -59,10 +59,10 @@ export default function MapPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [countryFilter, setCountryFilter] = useState<string>("");
-  const [sectorFilter, setSectorFilter] = useState<string>("");
-  const [statusFilter, setStatusFilter] = useState<string>("");
-  const [orgTypeFilter, setOrgTypeFilter] = useState<string>("");
+  const [countryFilter, setCountryFilter] = useState<string>("_all");
+  const [sectorFilter, setSectorFilter] = useState<string>("_all");
+  const [statusFilter, setStatusFilter] = useState<string>("_all");
+  const [orgTypeFilter, setOrgTypeFilter] = useState<string>("_all");
 
   const fetchData = async () => {
     setLoading(true);
@@ -100,22 +100,22 @@ export default function MapPage() {
 
   const filteredProjects = useMemo(() => {
     return projects.filter((project) => {
-      if (countryFilter && project.countryCode !== countryFilter) return false;
-      if (sectorFilter && project.sectorKey !== sectorFilter) return false;
-      if (statusFilter && project.status !== statusFilter) return false;
-      if (orgTypeFilter && project.organization.type !== orgTypeFilter) return false;
+      if (countryFilter !== "_all" && project.countryCode !== countryFilter) return false;
+      if (sectorFilter !== "_all" && project.sectorKey !== sectorFilter) return false;
+      if (statusFilter !== "_all" && project.status !== statusFilter) return false;
+      if (orgTypeFilter !== "_all" && project.organization.type !== orgTypeFilter) return false;
       return true;
     });
   }, [projects, countryFilter, sectorFilter, statusFilter, orgTypeFilter]);
 
   const clearFilters = () => {
-    setCountryFilter("");
-    setSectorFilter("");
-    setStatusFilter("");
-    setOrgTypeFilter("");
+    setCountryFilter("_all");
+    setSectorFilter("_all");
+    setStatusFilter("_all");
+    setOrgTypeFilter("_all");
   };
 
-  const hasFilters = countryFilter || sectorFilter || statusFilter || orgTypeFilter;
+  const hasFilters = countryFilter !== "_all" || sectorFilter !== "_all" || statusFilter !== "_all" || orgTypeFilter !== "_all";
 
   const stats = useMemo(() => {
     const active = filteredProjects.filter((p) => p.status === "ACTIVE").length;
@@ -152,7 +152,7 @@ export default function MapPage() {
                 <SelectValue placeholder="All Countries" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Countries</SelectItem>
+                <SelectItem value="_all">All Countries</SelectItem>
                 {countries.map((country) => (
                   <SelectItem key={country.code} value={country.code}>
                     {country.name}
@@ -166,7 +166,7 @@ export default function MapPage() {
                 <SelectValue placeholder="All Sectors" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Sectors</SelectItem>
+                <SelectItem value="_all">All Sectors</SelectItem>
                 {sectors.map((sector) => (
                   <SelectItem key={sector.key} value={sector.key}>
                     {sector.name}
@@ -180,7 +180,7 @@ export default function MapPage() {
                 <SelectValue placeholder="All Status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Status</SelectItem>
+                <SelectItem value="_all">All Status</SelectItem>
                 <SelectItem value="ACTIVE">Active</SelectItem>
                 <SelectItem value="PLANNED">Planned</SelectItem>
                 <SelectItem value="COMPLETED">Completed</SelectItem>
@@ -192,7 +192,7 @@ export default function MapPage() {
                 <SelectValue placeholder="All Org Types" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Org Types</SelectItem>
+                <SelectItem value="_all">All Org Types</SelectItem>
                 <SelectItem value="LNGO">Local NGO</SelectItem>
                 <SelectItem value="INGO">International NGO</SelectItem>
                 <SelectItem value="FOUNDATION">Foundation</SelectItem>
