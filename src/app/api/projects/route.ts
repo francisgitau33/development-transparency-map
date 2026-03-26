@@ -23,10 +23,8 @@ export async function GET(request: NextRequest) {
       where.organization = { type: organizationType.toUpperCase() };
     }
 
-    if (forMap) {
-      where.latitude = { not: null };
-      where.longitude = { not: null };
-    }
+    // forMap parameter is used by frontend but no filtering needed
+    // since latitude and longitude are required fields
 
     const projects = await prisma.project.findMany({
       where,

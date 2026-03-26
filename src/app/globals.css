@@ -67,3 +67,26 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Leaflet map z-index overrides */
+.leaflet-container {
+  z-index: 1 !important;
+}
+
+.leaflet-pane {
+  z-index: 1 !important;
+}
+
+.leaflet-top,
+.leaflet-bottom {
+  z-index: 500 !important;
+}
+
+.leaflet-popup {
+  z-index: 700 !important;
+}
+
+/* Ensure Radix UI portals appear above everything */
+[data-radix-popper-content-wrapper] {
+  z-index: 1100 !important;
+}

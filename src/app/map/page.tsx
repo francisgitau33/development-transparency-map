@@ -133,7 +133,7 @@ export default function MapPage() {
       >
         <div
           data-design-id="map-toolbar"
-          className="bg-white border-b border-slate-200 px-4 py-3"
+          className="bg-white border-b border-slate-200 px-4 py-3 relative z-[1000]"
         >
           <div
             data-design-id="map-toolbar-container"
@@ -151,7 +151,7 @@ export default function MapPage() {
               <SelectTrigger data-design-id="map-filter-country" className="w-[160px]">
                 <SelectValue placeholder="All Countries" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="z-[1100]">
                 <SelectItem value="_all">All Countries</SelectItem>
                 {countries.map((country) => (
                   <SelectItem key={country.code} value={country.code}>
@@ -165,7 +165,7 @@ export default function MapPage() {
               <SelectTrigger data-design-id="map-filter-sector" className="w-[160px]">
                 <SelectValue placeholder="All Sectors" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="z-[1100]">
                 <SelectItem value="_all">All Sectors</SelectItem>
                 {sectors.map((sector) => (
                   <SelectItem key={sector.key} value={sector.key}>
@@ -179,7 +179,7 @@ export default function MapPage() {
               <SelectTrigger data-design-id="map-filter-status" className="w-[140px]">
                 <SelectValue placeholder="All Status" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="z-[1100]">
                 <SelectItem value="_all">All Status</SelectItem>
                 <SelectItem value="ACTIVE">Active</SelectItem>
                 <SelectItem value="PLANNED">Planned</SelectItem>
@@ -191,7 +191,7 @@ export default function MapPage() {
               <SelectTrigger data-design-id="map-filter-orgtype" className="w-[160px]">
                 <SelectValue placeholder="All Org Types" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="z-[1100]">
                 <SelectItem value="_all">All Org Types</SelectItem>
                 <SelectItem value="LNGO">Local NGO</SelectItem>
                 <SelectItem value="INGO">International NGO</SelectItem>
@@ -252,7 +252,7 @@ export default function MapPage() {
 
           <Card
             data-design-id="map-legend"
-            className="absolute bottom-4 left-4 z-20 p-4 bg-white/95 backdrop-blur-sm max-w-xs"
+            className="absolute bottom-4 left-4 z-[1000] p-4 bg-white/95 backdrop-blur-sm max-w-xs"
           >
             <div
               data-design-id="map-legend-header"
@@ -286,7 +286,7 @@ export default function MapPage() {
 
           <Card
             data-design-id="map-summary"
-            className="absolute bottom-4 right-4 z-20 p-4 bg-white/95 backdrop-blur-sm"
+            className="absolute bottom-4 right-4 z-[1000] p-4 bg-white/95 backdrop-blur-sm"
           >
             <div
               data-design-id="map-summary-header"
