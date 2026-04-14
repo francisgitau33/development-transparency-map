@@ -66,13 +66,13 @@ async function main() {
   if (!existingAbout) {
     await prisma.cmsAbout.create({
       data: {
-        title: "About Map My Development Data",
-        subtitle: "Promoting Transparency in Development",
+        title: "About Development Transparency Map",
+        subtitle: "Mapping Development. Enabling Transparency.",
         bodySections: [
           {
             type: "text",
             content:
-              "Map My Development Data is a public platform that visualizes development projects worldwide, enabling transparency and accountability in the development sector.",
+              "Development Transparency Map is a public geospatial platform that visualizes development projects worldwide, enabling transparency and accountability in the development sector.",
           },
           {
             type: "text",

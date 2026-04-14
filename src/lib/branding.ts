@@ -5,7 +5,7 @@
  */
 
 export const BRANDING = {
-  productName: "Map My Development Data",
+  productName: "Development Transparency Map",
   tagline: "Mapping Development. Enabling Transparency.",
   subtitle: "See who is implementing what, where.",
   description: "A public geospatial platform for development projects worldwide.",

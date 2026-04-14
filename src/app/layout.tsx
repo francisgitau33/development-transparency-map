@@ -10,7 +10,7 @@ const manrope = Manrope({
 });
 
 export const metadata: Metadata = {
-  title: "Map My Development Data | Mapping Development. Enabling Transparency.",
+  title: "Development Transparency Map | Mapping Development. Enabling Transparency.",
   description: "A public geospatial platform for development projects worldwide. See who is implementing what, where.",
   keywords: ["development", "transparency", "geospatial", "projects", "NGO", "mapping"],
 };

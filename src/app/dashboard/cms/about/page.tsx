@@ -175,7 +175,7 @@ export default function AboutCMSPage() {
                     id="title"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    placeholder="About Map My Development Data"
+                    placeholder="About Development Transparency Map"
                   />
                 </div>
                 <div className="grid gap-2">
