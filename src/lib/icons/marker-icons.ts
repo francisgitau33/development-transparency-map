@@ -15,20 +15,20 @@ const markerIconSvgs: Record<string, string> = {
   // Education - Book
   "book-open": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M11.25 4.533A9.707 9.707 0 006 3a9.735 9.735 0 00-3.25.555.75.75 0 00-.5.707v14.25a.75.75 0 001 .707A8.237 8.237 0 016 18.75c1.995 0 3.823.707 5.25 1.886V4.533zM12.75 20.636A8.214 8.214 0 0118 18.75c.966 0 1.89.166 2.75.47a.75.75 0 001-.708V4.262a.75.75 0 00-.5-.707A9.735 9.735 0 0018 3a9.707 9.707 0 00-5.25 1.533v16.103z"/></svg>`,
   
-  // WASH - Droplet
-  "droplet": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path fill-rule="evenodd" d="M12 2.25c-2.429 0-4.817.178-7.152.521C2.87 3.061 1.5 4.795 1.5 6.741v6.018c0 1.946 1.37 3.68 3.348 3.97 1.94.284 3.917.484 5.927.597a.75.75 0 00.45-1.43 19.503 19.503 0 01-3.225-.873V8.845a.75.75 0 00-1.5 0v4.845a21.122 21.122 0 01-2.652-.534C2.684 12.853 2.25 11.88 2.25 10.76V6.74c0-1.12.434-2.093 1.598-2.396A43.108 43.108 0 0112 3.75c2.91 0 5.751.285 8.152.594 1.164.303 1.598 1.276 1.598 2.396v4.018c0 1.12-.434 2.093-1.598 2.396-.818.213-1.693.392-2.602.534V8.845a.75.75 0 00-1.5 0v6.178a19.503 19.503 0 01-3.225.873.75.75 0 00.45 1.43c2.01-.113 3.987-.313 5.927-.597 1.978-.29 3.348-2.024 3.348-3.97V6.74c0-1.946-1.37-3.68-3.348-3.97A44.629 44.629 0 0012 2.25z" clip-rule="evenodd"/><path d="M12 11.25a3.75 3.75 0 100 7.5 3.75 3.75 0 000-7.5z"/></svg>`,
+  // WASH - Droplet (water drop shape)
+  "droplet": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>`,
   
-  // Agriculture - Wheat/Plant
-  "wheat": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M12 2C9.243 2 7 4.243 7 7c0 2.475 1.81 4.518 4.175 4.918-.022.352-.175.678-.425.928L7.05 16.55a.75.75 0 101.05 1.05l3.7-3.7c.25-.25.576-.403.928-.425A5 5 0 0017 9c0-2.757-2.243-5-5-5zm0 2a3 3 0 110 6 3 3 0 010-6z"/><path d="M12 18.75a.75.75 0 01.75.75v2.25a.75.75 0 01-1.5 0V19.5a.75.75 0 01.75-.75z"/></svg>`,
+  // Agriculture - Wheat/Plant (grain stalk)
+  "wheat": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M12 3c-1.5 2-2 3.5-2 5s.5 2.5 2 3c1.5-.5 2-1.5 2-3s-.5-3-2-5zm-4 5c-1.5 1.5-2 3-2 4.5s.5 2 2 2.5c1.5-.5 2-1 2-2.5s-.5-3-2-4.5zm8 0c1.5 1.5 2 3 2 4.5s-.5 2-2 2.5c-1.5-.5-2-1-2-2.5s.5-3 2-4.5zM12 13v9"/><path d="M12 12c-1 1.5-1.5 3-1.5 4.5s.5 2.5 1.5 3.5c1-1 1.5-2 1.5-3.5S13 13.5 12 12z"/></svg>`,
   
-  // Infrastructure - Building
-  "building-2": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path fill-rule="evenodd" d="M3 2.25a.75.75 0 01.75.75v.54l1.838-.46a9.75 9.75 0 016.725.738l.108.054a8.25 8.25 0 005.58.652l3.109-.732a.75.75 0 01.917.81 47.784 47.784 0 00.005 10.337.75.75 0 01-.574.812l-3.114.733a9.75 9.75 0 01-6.594-.77l-.108-.054a8.25 8.25 0 00-5.69-.625l-1.952.488V21a.75.75 0 01-1.5 0V3a.75.75 0 01.75-.75z" clip-rule="evenodd"/></svg>`,
+  // Infrastructure - Building (office building)
+  "building-2": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M4 2h16a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1zm2 3v2h3V5H6zm0 4v2h3V9H6zm0 4v2h3v-2H6zm9-8v2h3V5h-3zm0 4v2h3V9h-3zm0 4v2h3v-2h-3zm-4 4v4h2v-4h-2z"/></svg>`,
   
   // Energy - Lightning
   "zap": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path fill-rule="evenodd" d="M14.615 1.595a.75.75 0 01.359.852L12.982 9.75h7.268a.75.75 0 01.548 1.262l-10.5 11.25a.75.75 0 01-1.272-.71l1.992-7.302H3.75a.75.75 0 01-.548-1.262l10.5-11.25a.75.75 0 01.913-.143z" clip-rule="evenodd"/></svg>`,
   
-  // Environment - Leaf
-  "leaf": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c1.1 0 2-.9 2-2v-.47c.58-.83.96-1.77 1.12-2.76.12-.71.88-1.18 1.6-1.02.72.16 1.17.87 1.05 1.59-.23 1.39-.78 2.65-1.58 3.72A9.963 9.963 0 0022 12c0-5.5-4.5-10-10-10zm-3 9H7v2h2v-2zm8-4h-2v2h2V7zm-8 0H7v2h2V7zm8 4h-2v2h2v-2z"/></svg>`,
+  // Environment - Leaf (natural leaf shape)
+  "leaf": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M17 8C8 10 5.9 16.17 3.82 21.34l1.89.66.95-2.3c.48.17.98.3 1.34.3C19 20 22 3 22 3c-1 2-8 2.25-13 3.25S2 11.5 2 13.5s1.75 3.75 1.75 3.75C7 8 17 8 17 8z"/></svg>`,
   
   // Governance - Landmark
   "landmark": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path fill-rule="evenodd" d="M11.622 1.602a.75.75 0 01.756 0l2.25 1.313a.75.75 0 01.378.65V5.5a.75.75 0 01-.75.75H10.5a.75.75 0 01-.75-.75V3.565a.75.75 0 01.378-.65l2.25-1.313zM4.5 7.5a.75.75 0 01.75-.75h13.5a.75.75 0 010 1.5h-.75v8.25h.75a.75.75 0 010 1.5H5.25a.75.75 0 010-1.5H6V8.25h-.75a.75.75 0 01-.75-.75zm3 .75v8.25h3V8.25h-3zm4.5 0v8.25h3V8.25h-3z" clip-rule="evenodd"/><path d="M3 19.5a.75.75 0 01.75-.75h16.5a.75.75 0 010 1.5H3.75a.75.75 0 01-.75-.75z"/></svg>`,
