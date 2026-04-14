@@ -15,7 +15,8 @@ import { ErrorState } from "@/components/shared/ErrorState";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { useAuth } from "@/lib/auth-context";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, MapPin, FolderOpen, Search } from "lucide-react";
+import { Plus, Pencil, Trash2, MapPin, FolderOpen, Search, Eye } from "lucide-react";
+import Link from "next/link";
 import { SectorIcon } from "@/components/shared/SectorIcon";
 
 interface Project {
@@ -339,6 +340,15 @@ export default function ProjectsPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
+                      <Link href={`/projects/${project.id}`}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          data-design-id={`project-view-${project.id}`}
+                        >
+                          <Eye className="w-4 h-4" />
+                        </Button>
+                      </Link>
                       <Button
                         variant="ghost"
                         size="sm"

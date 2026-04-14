@@ -16,7 +16,7 @@ import { ErrorState } from "@/components/shared/ErrorState";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { useAuth } from "@/lib/auth-context";
 import { toast } from "sonner";
-import { Plus, Building2, Search, ExternalLink, FolderOpen, Users } from "lucide-react";
+import { Plus, Building2, Search, ExternalLink, FolderOpen, Users, Pencil } from "lucide-react";
 
 interface Organization {
   id: string;
@@ -55,6 +55,7 @@ export default function OrganizationsPage() {
   const [searchQuery, setSearchQuery] = useState("");
 
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingOrg, setEditingOrg] = useState<Organization | null>(null);
   const [saving, setSaving] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -106,6 +107,25 @@ export default function OrganizationsPage() {
       description: "",
       active: true,
     });
+    setEditingOrg(null);
+  };
+
+  const openDialog = (org?: Organization) => {
+    if (org) {
+      setEditingOrg(org);
+      setFormData({
+        name: org.name,
+        type: org.type,
+        countryCode: org.countryCode,
+        website: org.website || "",
+        contactEmail: org.contactEmail || "",
+        description: org.description || "",
+        active: org.active,
+      });
+    } else {
+      resetForm();
+    }
+    setDialogOpen(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -113,8 +133,11 @@ export default function OrganizationsPage() {
     setSaving(true);
 
     try {
-      const res = await fetch("/api/organizations", {
-        method: "POST",
+      const url = editingOrg ? `/api/organizations/${editingOrg.id}` : "/api/organizations";
+      const method = editingOrg ? "PUT" : "POST";
+
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
       });
@@ -122,15 +145,15 @@ export default function OrganizationsPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || "Failed to create organization");
+        throw new Error(data.error || `Failed to ${editingOrg ? "update" : "create"} organization`);
       }
 
-      toast.success("Organization created successfully");
+      toast.success(editingOrg ? "Organization updated successfully" : "Organization created successfully");
       setDialogOpen(false);
       resetForm();
       fetchData();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to create organization");
+      toast.error(err instanceof Error ? err.message : `Failed to ${editingOrg ? "update" : "create"} organization`);
     } finally {
       setSaving(false);
     }
@@ -167,7 +190,7 @@ export default function OrganizationsPage() {
         </div>
         {isSystemOwner && (
           <Button
-            onClick={() => setDialogOpen(true)}
+            onClick={() => openDialog()}
             data-design-id="organizations-add-button"
             className="bg-sky-600 hover:bg-sky-700"
           >
@@ -208,7 +231,7 @@ export default function OrganizationsPage() {
               description={isSystemOwner ? "Create your first organization to get started" : "No organizations available"}
               action={
                 isSystemOwner && (
-                  <Button onClick={() => setDialogOpen(true)} className="bg-sky-600 hover:bg-sky-700">
+                  <Button onClick={() => openDialog()} className="bg-sky-600 hover:bg-sky-700">
                     <Plus className="w-4 h-4 mr-2" />
                     New Organization
                   </Button>
@@ -227,6 +250,7 @@ export default function OrganizationsPage() {
                   <TableHead>Projects</TableHead>
                   <TableHead>Users</TableHead>
                   <TableHead>Status</TableHead>
+                  {isSystemOwner && <TableHead className="text-right">Actions</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -281,6 +305,18 @@ export default function OrganizationsPage() {
                         {org.active ? "Active" : "Inactive"}
                       </Badge>
                     </TableCell>
+                    {isSystemOwner && (
+                      <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openDialog(org)}
+                          data-design-id={`org-edit-${org.id}`}
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>
@@ -292,9 +328,11 @@ export default function OrganizationsPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-lg" data-design-id="organization-dialog">
           <DialogHeader>
-            <DialogTitle>New Organization</DialogTitle>
+            <DialogTitle>{editingOrg ? "Edit Organization" : "New Organization"}</DialogTitle>
             <DialogDescription>
-              Add a new partner organization to the platform
+              {editingOrg 
+                ? "Update the organization details below" 
+                : "Add a new partner organization to the platform"}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit}>
@@ -399,7 +437,9 @@ export default function OrganizationsPage() {
                 disabled={saving}
                 className="bg-sky-600 hover:bg-sky-700"
               >
-                {saving ? "Creating..." : "Create Organization"}
+                {saving 
+                  ? (editingOrg ? "Updating..." : "Creating...") 
+                  : (editingOrg ? "Update Organization" : "Create Organization")}
               </Button>
             </DialogFooter>
           </form>
