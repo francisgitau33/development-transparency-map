@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { getMarkerIconSvg } from "@/lib/icons/marker-icons";
 
 interface Project {
   id: string;
@@ -33,21 +34,26 @@ interface MapComponentProps {
   onProjectClick?: (project: Project) => void;
 }
 
-const DEFAULT_ICON_HTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4"><path fill-rule="evenodd" d="m11.54 22.351.07.04.028.016a.76.76 0 0 0 .723 0l.028-.015.071-.041a16.975 16.975 0 0 0 1.144-.742 19.58 19.58 0 0 0 2.683-2.282c1.944-1.99 3.963-4.98 3.963-8.827a8.25 8.25 0 0 0-16.5 0c0 3.846 2.02 6.837 3.963 8.827a19.58 19.58 0 0 0 2.682 2.282 16.975 16.975 0 0 0 1.145.742ZM12 13.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" clip-rule="evenodd" /></svg>`;
-
 export function MapComponent({ projects, sectors, onProjectClick }: MapComponentProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const markersRef = useRef<L.LayerGroup | null>(null);
 
+  const getSector = (sectorKey: string): Sector | undefined => {
+    return sectors.find((s) => s.key === sectorKey);
+  };
+
   const getSectorColor = (sectorKey: string): string => {
-    const sector = sectors.find((s) => s.key === sectorKey);
-    return sector?.color || "#6b7280";
+    return getSector(sectorKey)?.color || "#6b7280";
   };
 
   const getSectorName = (sectorKey: string): string => {
-    const sector = sectors.find((s) => s.key === sectorKey);
-    return sector?.name || sectorKey;
+    return getSector(sectorKey)?.name || sectorKey;
+  };
+
+  const getSectorIconSvg = (sectorKey: string): string => {
+    const sector = getSector(sectorKey);
+    return getMarkerIconSvg(sector?.icon);
   };
 
   useEffect(() => {
@@ -85,10 +91,11 @@ export function MapComponent({ projects, sectors, onProjectClick }: MapComponent
 
     validProjects.forEach((project) => {
       const color = getSectorColor(project.sectorKey);
+      const sectorIconSvg = getSectorIconSvg(project.sectorKey);
 
       const icon = L.divIcon({
         className: "custom-marker",
-        html: `<div style="background-color: ${color}; width: 32px; height: 32px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); display: flex; align-items: center; justify-content: center; border: 2px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3);"><div style="transform: rotate(45deg); color: white;">${DEFAULT_ICON_HTML}</div></div>`,
+        html: `<div style="background-color: ${color}; width: 32px; height: 32px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); display: flex; align-items: center; justify-content: center; border: 2px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3);"><div style="transform: rotate(45deg); color: white;">${sectorIconSvg}</div></div>`,
         iconSize: [32, 32],
         iconAnchor: [16, 32],
         popupAnchor: [0, -32],

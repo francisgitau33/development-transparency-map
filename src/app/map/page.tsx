@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { X, Filter, MapPin, Building2, Layers, AlertCircle } from "lucide-react";
+import { X, Filter, MapPin, Building2, Layers, AlertCircle, ChevronDown, ChevronUp } from "lucide-react";
 import { SectorIcon, SectorLegendItem } from "@/components/shared/SectorIcon";
 
 const MapComponent = dynamic(
@@ -117,6 +117,8 @@ export default function MapPage() {
   };
 
   const hasFilters = countryFilter !== "_all" || sectorFilter !== "_all" || statusFilter !== "_all" || orgTypeFilter !== "_all";
+
+  const [legendExpanded, setLegendExpanded] = useState(true);
 
   const stats = useMemo(() => {
     const active = filteredProjects.filter((p) => p.status === "ACTIVE").length;
@@ -256,37 +258,47 @@ export default function MapPage() {
 
           <Card
             data-design-id="map-legend"
-            className="absolute bottom-4 left-4 z-[1000] p-4 bg-white/95 backdrop-blur-sm max-w-xs"
+            className="absolute bottom-4 left-4 z-[1000] bg-white/95 backdrop-blur-sm shadow-lg w-48 md:w-56"
           >
-            <div
+            <button
+              onClick={() => setLegendExpanded(!legendExpanded)}
               data-design-id="map-legend-header"
-              className="flex items-center mb-3 font-semibold text-slate-900"
+              className="flex items-center justify-between w-full p-3 font-semibold text-slate-900 hover:bg-slate-50 transition-colors"
             >
-              <Layers className="w-4 h-4 mr-2" />
-              Legend
-            </div>
-            <div
-              data-design-id="map-legend-items"
-              className="space-y-2"
-            >
-              {error && sectors.length === 0 ? (
-                <div className="flex items-center gap-2 text-sm text-amber-600">
-                  <AlertCircle className="w-4 h-4" />
-                  <span>Sector data unavailable</span>
-                </div>
-              ) : sectors.length === 0 ? (
-                <p className="text-sm text-slate-500">No sectors available</p>
+              <div className="flex items-center">
+                <Layers className="w-4 h-4 mr-2" />
+                Legend
+              </div>
+              {legendExpanded ? (
+                <ChevronDown className="w-4 h-4 text-slate-500" />
               ) : (
-                sectors.map((sector) => (
-                  <SectorLegendItem
-                    key={sector.key}
-                    iconKey={sector.icon}
-                    name={sector.name}
-                    color={sector.color}
-                  />
-                ))
+                <ChevronUp className="w-4 h-4 text-slate-500" />
               )}
-            </div>
+            </button>
+            {legendExpanded && (
+              <div
+                data-design-id="map-legend-items"
+                className="px-3 pb-3 space-y-1.5 max-h-48 overflow-y-auto"
+              >
+                {error && sectors.length === 0 ? (
+                  <div className="flex items-center gap-2 text-sm text-amber-600">
+                    <AlertCircle className="w-4 h-4" />
+                    <span>Sector data unavailable</span>
+                  </div>
+                ) : sectors.length === 0 ? (
+                  <p className="text-sm text-slate-500">No sectors available</p>
+                ) : (
+                  sectors.map((sector) => (
+                    <SectorLegendItem
+                      key={sector.key}
+                      iconKey={sector.icon}
+                      name={sector.name}
+                      color={sector.color}
+                    />
+                  ))
+                )}
+              </div>
+            )}
           </Card>
 
           <Card
