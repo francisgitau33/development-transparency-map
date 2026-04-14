@@ -18,6 +18,7 @@ import {
   ArrowLeft,
   ExternalLink,
   Layers,
+  Users,
 } from "lucide-react";
 
 interface Project {
@@ -32,6 +33,7 @@ interface Project {
   startDate: string;
   endDate: string | null;
   budgetUsd: number | null;
+  targetBeneficiaries: number | null;
   latitude: number;
   longitude: number;
   locationName: string | null;
@@ -135,6 +137,10 @@ export default function ProjectDetailPage({
       currency: "USD",
       maximumFractionDigits: 0,
     }).format(amount);
+  };
+
+  const formatNumber = (num: number) => {
+    return new Intl.NumberFormat("en-US").format(num);
   };
 
   const getStatusColor = (status: string) => {
@@ -246,7 +252,7 @@ export default function ProjectDetailPage({
                   {/* Quick Info Grid */}
                   <div
                     data-design-id="project-quick-info"
-                    className="grid grid-cols-2 md:grid-cols-4 gap-4"
+                    className="grid grid-cols-2 md:grid-cols-5 gap-4"
                   >
                     <div className="flex items-center gap-2 text-sm text-slate-600">
                       <Building2 className="w-4 h-4 text-slate-400" />
@@ -260,6 +266,12 @@ export default function ProjectDetailPage({
                       <Calendar className="w-4 h-4 text-slate-400" />
                       <span>{formatDate(project.startDate)}</span>
                     </div>
+                    {project.targetBeneficiaries && (
+                      <div className="flex items-center gap-2 text-sm text-slate-600">
+                        <Users className="w-4 h-4 text-slate-400" />
+                        <span>{formatNumber(project.targetBeneficiaries)} beneficiaries</span>
+                      </div>
+                    )}
                     {project.budgetUsd && (
                       <div className="flex items-center gap-2 text-sm text-slate-600">
                         <DollarSign className="w-4 h-4 text-slate-400" />
@@ -384,12 +396,12 @@ export default function ProjectDetailPage({
                   </CardContent>
                 </Card>
 
-                {/* Sector & Budget */}
+                {/* Sector, Funding & Impact */}
                 <Card data-design-id="project-sector-card">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-lg">
                       <Layers className="w-5 h-5 text-sky-600" />
-                      Sector & Funding
+                      Sector, Funding & Impact
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -409,6 +421,14 @@ export default function ProjectDetailPage({
                           </p>
                         </div>
                       </div>
+                      {project.targetBeneficiaries && (
+                        <div>
+                          <p className="text-sm text-slate-500">Target Beneficiaries</p>
+                          <p className="font-medium text-slate-900 text-lg">
+                            {formatNumber(project.targetBeneficiaries)} people
+                          </p>
+                        </div>
+                      )}
                       {project.budgetUsd && (
                         <div>
                           <p className="text-sm text-slate-500">Budget (USD)</p>

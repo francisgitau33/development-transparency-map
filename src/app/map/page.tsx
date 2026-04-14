@@ -34,6 +34,7 @@ interface Project {
   sectorKey: string;
   status: string;
   locationName: string | null;
+  targetBeneficiaries: number | null;
   organization: {
     id: string;
     name: string;

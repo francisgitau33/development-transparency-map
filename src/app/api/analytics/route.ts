@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
       projectsByCountry,
       projectsBySector,
       projectsByStatus,
-      totalBudget,
+      aggregates,
       recentProjects,
     ] = await Promise.all([
       prisma.project.count({ where: orgFilter }),
@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
       }),
       prisma.project.aggregate({
         where: orgFilter,
-        _sum: { budgetUsd: true },
+        _sum: { budgetUsd: true, targetBeneficiaries: true },
       }),
       prisma.project.findMany({
         where: orgFilter,
@@ -82,7 +82,8 @@ export async function GET(request: NextRequest) {
       summary: {
         totalProjects,
         totalOrganizations,
-        totalBudget: totalBudget._sum.budgetUsd || 0,
+        totalBudget: aggregates._sum.budgetUsd || 0,
+        totalBeneficiaries: aggregates._sum.targetBeneficiaries || 0,
         activeProjects: projectsByStatus.find((p) => p.status === "ACTIVE")?._count.id || 0,
         plannedProjects: projectsByStatus.find((p) => p.status === "PLANNED")?._count.id || 0,
         completedProjects: projectsByStatus.find((p) => p.status === "COMPLETED")?._count.id || 0,

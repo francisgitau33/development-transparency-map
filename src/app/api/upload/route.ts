@@ -14,6 +14,7 @@ interface CSVRow {
   latitude?: string;
   longitude?: string;
   budgetUsd?: string;
+  targetBeneficiaries?: string;
   adminArea1?: string;
   adminArea2?: string;
   locationName?: string;
@@ -119,6 +120,7 @@ export async function POST(request: NextRequest) {
         latitude: row.latitude,
         longitude: row.longitude,
         budgetUsd: row.budgetUsd,
+        targetBeneficiaries: row.targetBeneficiaries,
         adminArea1: row.adminArea1,
         adminArea2: row.adminArea2,
         locationName: row.locationName,

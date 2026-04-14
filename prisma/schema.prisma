@@ -99,26 +99,27 @@ enum ProjectStatus {
 }
 
 model Project {
-  id              String        @id @default(cuid())
-  title           String
-  description     String
-  organizationId  String
-  countryCode     String
-  adminArea1      String?
-  adminArea2      String?
-  sectorKey       String
-  status          ProjectStatus
-  startDate       DateTime
-  endDate         DateTime?
-  budgetUsd       Float?
-  latitude        Float
-  longitude       Float
-  locationName    String?
-  dataSource      String?
-  contactEmail    String?
-  createdByUserId String
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  id                 String        @id @default(cuid())
+  title              String
+  description        String
+  organizationId     String
+  countryCode        String
+  adminArea1         String?
+  adminArea2         String?
+  sectorKey          String
+  status             ProjectStatus
+  startDate          DateTime
+  endDate            DateTime?
+  budgetUsd          Float?
+  targetBeneficiaries Int?         // Number of people the project aims to reach/serve
+  latitude           Float
+  longitude          Float
+  locationName       String?
+  dataSource         String?
+  contactEmail       String?
+  createdByUserId    String
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id])
   createdBy    User         @relation("CreatedBy", fields: [createdByUserId], references: [id])

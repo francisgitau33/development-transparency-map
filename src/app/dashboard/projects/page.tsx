@@ -29,6 +29,7 @@ interface Project {
   startDate: string;
   endDate: string | null;
   budgetUsd: number | null;
+  targetBeneficiaries: number | null;
   latitude: number;
   longitude: number;
   locationName: string | null;
@@ -79,6 +80,7 @@ export default function ProjectsPage() {
     startDate: "",
     endDate: "",
     budgetUsd: "",
+    targetBeneficiaries: "",
     latitude: "",
     longitude: "",
     locationName: "",
@@ -130,6 +132,7 @@ export default function ProjectsPage() {
       startDate: "",
       endDate: "",
       budgetUsd: "",
+      targetBeneficiaries: "",
       latitude: "",
       longitude: "",
       locationName: "",
@@ -150,6 +153,7 @@ export default function ProjectsPage() {
         startDate: project.startDate.split("T")[0],
         endDate: project.endDate ? project.endDate.split("T")[0] : "",
         budgetUsd: project.budgetUsd?.toString() || "",
+        targetBeneficiaries: project.targetBeneficiaries?.toString() || "",
         latitude: project.latitude.toString(),
         longitude: project.longitude.toString(),
         locationName: project.locationName || "",
@@ -174,6 +178,7 @@ export default function ProjectsPage() {
         body: JSON.stringify({
           ...formData,
           budgetUsd: formData.budgetUsd ? parseFloat(formData.budgetUsd) : null,
+          targetBeneficiaries: formData.targetBeneficiaries ? parseInt(formData.targetBeneficiaries) : null,
           latitude: parseFloat(formData.latitude),
           longitude: parseFloat(formData.longitude),
         }),
@@ -563,6 +568,17 @@ export default function ProjectsPage() {
                     onChange={(e) => setFormData({ ...formData, budgetUsd: e.target.value })}
                   />
                 </div>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="targetBeneficiaries">Target Beneficiaries</Label>
+                <Input
+                  id="targetBeneficiaries"
+                  type="number"
+                  value={formData.targetBeneficiaries}
+                  onChange={(e) => setFormData({ ...formData, targetBeneficiaries: e.target.value })}
+                  placeholder="Number of people the project aims to reach"
+                />
               </div>
             </div>
 

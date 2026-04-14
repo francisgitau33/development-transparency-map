@@ -92,6 +92,7 @@ export function validateProject(data: Record<string, unknown>): ValidationResult
           status,
           endDate: normalizeDate(data.endDate),
           budgetUsd: data.budgetUsd ? parseFloat(String(data.budgetUsd)) : null,
+          targetBeneficiaries: data.targetBeneficiaries ? parseInt(String(data.targetBeneficiaries)) : null,
           adminArea1: normalizeString(data.adminArea1) || null,
           adminArea2: normalizeString(data.adminArea2) || null,
           locationName: normalizeString(data.locationName) || null,
