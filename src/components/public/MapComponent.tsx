@@ -111,7 +111,7 @@ export function MapComponent({ projects, sectors, onProjectClick }: MapComponent
           ${project.locationName ? `<p style="margin: 0 0 4px 0; font-size: 12px; color: #64748b;"><strong>Location:</strong> ${project.locationName}</p>` : ""}
           <p style="margin: 0 0 4px 0; font-size: 12px; color: #64748b;"><strong>Status:</strong> <span style="display: inline-block; padding: 2px 8px; background: ${project.status === "ACTIVE" ? "#dcfce7" : project.status === "PLANNED" ? "#fef3c7" : "#e2e8f0"}; color: ${project.status === "ACTIVE" ? "#166534" : project.status === "PLANNED" ? "#92400e" : "#475569"}; border-radius: 9999px; font-size: 11px;">${project.status}</span></p>
           <p style="margin: 8px 0 0 0; font-size: 12px; color: #475569; line-height: 1.4;">${project.description.substring(0, 150)}${project.description.length > 150 ? "..." : ""}</p>
-          <a href="/projects/${project.id}" style="display: inline-block; margin-top: 10px; padding: 6px 12px; background: #0284c7; color: white; border-radius: 6px; font-size: 12px; text-decoration: none; font-weight: 500;">View Details</a>
+          <a href="/projects/${project.id}" target="_blank" rel="noopener noreferrer" style="display: inline-block; margin-top: 10px; padding: 6px 12px; background: #0284c7; color: white; border-radius: 6px; font-size: 12px; text-decoration: none; font-weight: 500;">View Details</a>
         </div>
       `;
 
