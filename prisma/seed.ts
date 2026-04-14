@@ -1,9 +1,87 @@
 import { PrismaClient } from "@prisma/client";
+import bcrypt from "bcrypt";
 
 const prisma = new PrismaClient();
 
+/**
+ * SYSTEM_OWNER SEEDING
+ * 
+ * Environment Variables Required:
+ * - SYSTEM_OWNER_EMAIL: Email for the initial system owner (defaults to branding config)
+ * - SYSTEM_OWNER_PASSWORD: Initial password for the system owner (REQUIRED for first setup)
+ * 
+ * This is idempotent - running multiple times will:
+ * - Skip user creation if email already exists
+ * - Update/create role if user exists but role is missing
+ */
+async function seedSystemOwner() {
+  const systemOwnerEmail = process.env.SYSTEM_OWNER_EMAIL || "theforestforthetrees23@gmail.com";
+  const systemOwnerPassword = process.env.SYSTEM_OWNER_PASSWORD;
+
+  if (!systemOwnerPassword) {
+    console.log("⚠️  SYSTEM_OWNER_PASSWORD not set - skipping system owner creation");
+    console.log("   To create initial admin, run with: SYSTEM_OWNER_PASSWORD=yourpassword npx prisma db seed");
+    return;
+  }
+
+  console.log(`Setting up SYSTEM_OWNER: ${systemOwnerEmail}`);
+
+  // Check if user already exists
+  const existingUser = await prisma.user.findUnique({
+    where: { email: systemOwnerEmail },
+    include: { role: true },
+  });
+
+  if (existingUser) {
+    // User exists - check if role exists
+    if (existingUser.role) {
+      console.log(`✓ SYSTEM_OWNER already exists with role: ${existingUser.role.role}`);
+      return;
+    }
+
+    // User exists but no role - add role
+    console.log(`User exists but missing role - adding SYSTEM_OWNER role...`);
+    await prisma.role.create({
+      data: {
+        userId: existingUser.id,
+        email: existingUser.email,
+        role: "SYSTEM_OWNER",
+        organizationId: null,
+      },
+    });
+    console.log(`✓ SYSTEM_OWNER role added to existing user`);
+    return;
+  }
+
+  // Create new user with role
+  const hashedPassword = await bcrypt.hash(systemOwnerPassword, 10);
+
+  const user = await prisma.user.create({
+    data: {
+      email: systemOwnerEmail,
+      password: hashedPassword,
+      displayName: "System Owner",
+    },
+  });
+
+  await prisma.role.create({
+    data: {
+      userId: user.id,
+      email: user.email,
+      role: "SYSTEM_OWNER",
+      organizationId: null,
+    },
+  });
+
+  console.log(`✓ SYSTEM_OWNER created: ${systemOwnerEmail}`);
+  console.log(`  IMPORTANT: Change this password after first login!`);
+}
+
 async function main() {
   console.log("Seeding database...");
+
+  // Seed SYSTEM_OWNER first
+  await seedSystemOwner();
 
   // Seed reference countries
   const countries = [

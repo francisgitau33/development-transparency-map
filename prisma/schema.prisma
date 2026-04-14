@@ -187,3 +187,16 @@ model UploadJob {
   uploadedBy   User         @relation(fields: [uploadedByUserId], references: [id])
   organization Organization @relation(fields: [organizationId], references: [id])
 }
+
+// Password reset tokens
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  email     String
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@index([expiresAt])
+}
