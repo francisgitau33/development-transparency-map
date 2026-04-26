@@ -95,6 +95,8 @@ export function validateProject(data: Record<string, unknown>): ValidationResult
           targetBeneficiaries: data.targetBeneficiaries ? Number.parseInt(String(data.targetBeneficiaries)) : null,
           adminArea1: normalizeString(data.adminArea1) || null,
           adminArea2: normalizeString(data.adminArea2) || null,
+          administrativeAreaId: normalizeString(data.administrativeAreaId) || null,
+          donorId: normalizeString(data.donorId) || null,
           locationName: normalizeString(data.locationName) || null,
           dataSource: normalizeString(data.dataSource) || null,
           contactEmail: normalizeEmail(data.contactEmail) || null,
@@ -157,6 +159,110 @@ export function validateSector(data: Record<string, unknown>): ValidationResult 
           sortOrder: Number.parseInt(String(data.sortOrder)) || 0,
         }
       : undefined,
+  };
+}
+
+const ADMIN_AREA_TYPES = new Set([
+  "DISTRICT",
+  "COUNTY",
+  "REGION",
+  "PROVINCE",
+  "STATE",
+  "MUNICIPALITY",
+  "SUBCOUNTY",
+  "DIVISION",
+  "WARD",
+  "OTHER",
+]);
+
+export function validateAdministrativeArea(
+  data: Record<string, unknown>,
+): ValidationResult {
+  const errors: string[] = [];
+
+  const name = normalizeString(data.name);
+  const countryCode = normalizeCountryCode(data.countryCode);
+  // `type` is optional and free-form, but we normalize casing for consistency.
+  const rawType = normalizeString(data.type);
+  const type = rawType ? rawType.toUpperCase() : "";
+
+  if (!name) errors.push("Administrative area name is required");
+  if (!countryCode) errors.push("Country is required");
+  if (type && !ADMIN_AREA_TYPES.has(type)) {
+    // Allow free-form types but record a warning-style error only when
+    // an obviously garbage value is supplied. Unknown but reasonable
+    // strings pass through so countries with unusual local labels
+    // (e.g. "Oblast", "Prefecture") still work.
+    if (type.length > 64) {
+      errors.push("Administrative area type is too long");
+    }
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+    normalizedData:
+      errors.length === 0
+        ? {
+            name,
+            countryCode,
+            type: rawType || null,
+            active: data.active !== false,
+            sortOrder: Number.parseInt(String(data.sortOrder)) || 0,
+          }
+        : undefined,
+  };
+}
+
+const DONOR_TYPES = new Set([
+  "BILATERAL",
+  "MULTILATERAL",
+  "FOUNDATION",
+  "CORPORATE",
+  "GOVERNMENT",
+  "INDIVIDUAL",
+  "INGO",
+  "POOLED_FUND",
+  "POOLED FUND",
+  "OTHER",
+]);
+
+export function validateDonor(data: Record<string, unknown>): ValidationResult {
+  const errors: string[] = [];
+
+  const name = normalizeString(data.name);
+  const rawType = normalizeString(data.donorType);
+  const donorType = rawType ? rawType.toUpperCase() : "";
+
+  if (!name) errors.push("Donor name is required");
+  if (rawType && rawType.length > 64) {
+    errors.push("Donor type is too long");
+  }
+  // DONOR_TYPES is suggestive, not enforced, so partners can record unusual
+  // funder categories without a schema change.
+  void DONOR_TYPES;
+  void donorType;
+
+  const website = normalizeString(data.website);
+  if (website && !/^https?:\/\//i.test(website)) {
+    errors.push("Donor website must start with http:// or https://");
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+    normalizedData:
+      errors.length === 0
+        ? {
+            name,
+            donorType: rawType || null,
+            countryOfOrigin:
+              normalizeCountryCode(data.countryOfOrigin) || null,
+            website: website || null,
+            active: data.active !== false,
+            sortOrder: Number.parseInt(String(data.sortOrder)) || 0,
+          }
+        : undefined,
   };
 }
 

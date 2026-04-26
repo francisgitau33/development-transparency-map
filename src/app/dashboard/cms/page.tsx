@@ -6,7 +6,14 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth-context";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { Globe, Layers, FileText, ArrowRight } from "lucide-react";
+import {
+  Globe,
+  Layers,
+  FileText,
+  ArrowRight,
+  Map as MapIcon,
+  HandCoins,
+} from "lucide-react";
 
 export default function CMSPage() {
   const router = useRouter();
@@ -80,6 +87,48 @@ export default function CMSPage() {
             <Link href="/dashboard/cms/sectors">
               <Button className="w-full">
                 Manage Sectors
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        <Card data-design-id="cms-admin-areas-card" className="hover:shadow-lg transition-shadow">
+          <CardHeader>
+            <div className="w-12 h-12 bg-emerald-100 rounded-lg flex items-center justify-center mb-4">
+              <MapIcon className="w-6 h-6 text-emerald-600" />
+            </div>
+            <CardTitle>Districts / Counties</CardTitle>
+            <CardDescription>
+              Manage administrative areas (Districts, Counties, Regions, …) used
+              for project filtering and reporting.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/dashboard/cms/administrative-areas">
+              <Button className="w-full">
+                Manage Districts / Counties
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        <Card data-design-id="cms-donors-card" className="hover:shadow-lg transition-shadow">
+          <CardHeader>
+            <div className="w-12 h-12 bg-amber-100 rounded-lg flex items-center justify-center mb-4">
+              <HandCoins className="w-6 h-6 text-amber-600" />
+            </div>
+            <CardTitle>Donors</CardTitle>
+            <CardDescription>
+              Manage donor / funder reference data linked to projects for funding
+              analysis.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/dashboard/cms/donors">
+              <Button className="w-full">
+                Manage Donors
                 <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
             </Link>

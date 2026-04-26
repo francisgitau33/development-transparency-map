@@ -45,6 +45,19 @@ interface Project {
     name: string;
     type: string;
   };
+  administrativeArea?: {
+    id: string;
+    name: string;
+    type: string | null;
+    countryCode: string;
+  } | null;
+  donor?: {
+    id: string;
+    name: string;
+    donorType: string | null;
+    countryOfOrigin: string | null;
+    website: string | null;
+  } | null;
 }
 
 interface Country {
@@ -330,10 +343,23 @@ export default function ProjectDetailPage({
                           </p>
                         </div>
                       )}
+                      {project.administrativeArea && (
+                        <div data-design-id="project-district-county">
+                          <p className="text-sm text-slate-500">
+                            District / County
+                          </p>
+                          <p className="font-medium text-slate-900">
+                            {project.administrativeArea.name}
+                            {project.administrativeArea.type
+                              ? ` · ${project.administrativeArea.type}`
+                              : ""}
+                          </p>
+                        </div>
+                      )}
                       {(project.adminArea1 || project.adminArea2) && (
                         <div>
                           <p className="text-sm text-slate-500">
-                            Administrative Area
+                            Administrative Area (legacy)
                           </p>
                           <p className="font-medium text-slate-900">
                             {[project.adminArea1, project.adminArea2]
@@ -434,6 +460,28 @@ export default function ProjectDetailPage({
                           <p className="text-sm text-slate-500">Budget (USD)</p>
                           <p className="font-medium text-slate-900 text-lg">
                             {formatCurrency(project.budgetUsd)}
+                          </p>
+                        </div>
+                      )}
+                      {project.donor && (
+                        <div data-design-id="project-donor">
+                          <p className="text-sm text-slate-500">Donor</p>
+                          <p className="font-medium text-slate-900">
+                            {project.donor.website ? (
+                              <a
+                                href={project.donor.website}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sky-700 hover:text-sky-800 underline-offset-2 hover:underline"
+                              >
+                                {project.donor.name}
+                              </a>
+                            ) : (
+                              project.donor.name
+                            )}
+                            {project.donor.donorType
+                              ? ` · ${project.donor.donorType}`
+                              : ""}
                           </p>
                         </div>
                       )}

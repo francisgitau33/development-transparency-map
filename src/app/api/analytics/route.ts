@@ -1,6 +1,11 @@
 import { type NextRequest, NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
+import {
+  buildProjectFilterWhere,
+  parseProjectFilterParams,
+} from "@/lib/project-filters";
 
 export async function GET(request: NextRequest) {
   try {
@@ -8,8 +13,15 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const organizationId = searchParams.get("organizationId");
 
-    let orgFilter: { organizationId?: string } = {};
+    // Parse filter params (Country, Sector, Status, Organisation, Donor,
+    // District/County, Active During Year, Budget Tier).
+    const filterParams = parseProjectFilterParams(searchParams);
+    const { where: filterWhere } = buildProjectFilterWhere(filterParams);
 
+    // Access control + org scoping. Partner Admins are locked to their own
+    // org regardless of query. System Owners may pass organizationId to scope
+    // a view; otherwise they see everything.
+    let orgScope: Prisma.ProjectWhereInput = {};
     if (session) {
       const user = await prisma.user.findUnique({
         where: { id: session.userId },
@@ -17,11 +29,19 @@ export async function GET(request: NextRequest) {
       });
 
       if (user?.role?.role === "PARTNER_ADMIN" && user.role.organizationId) {
-        orgFilter = { organizationId: user.role.organizationId };
+        orgScope = { organizationId: user.role.organizationId };
       } else if (organizationId) {
-        orgFilter = { organizationId };
+        orgScope = { organizationId };
       }
+    } else {
+      // Unauthenticated callers only ever see PUBLISHED projects.
+      orgScope = { visibility: "PUBLISHED" };
     }
+
+    // Compose: AND of filter params + org scope.
+    const where: Prisma.ProjectWhereInput = {
+      AND: [filterWhere, orgScope],
+    };
 
     const [
       totalProjects,
@@ -32,32 +52,32 @@ export async function GET(request: NextRequest) {
       aggregates,
       recentProjects,
     ] = await Promise.all([
-      prisma.project.count({ where: orgFilter }),
+      prisma.project.count({ where }),
       prisma.organization.count({ where: { active: true } }),
       prisma.project.groupBy({
         by: ["countryCode"],
-        where: orgFilter,
+        where,
         _count: { id: true },
         orderBy: { _count: { id: "desc" } },
         take: 10,
       }),
       prisma.project.groupBy({
         by: ["sectorKey"],
-        where: orgFilter,
+        where,
         _count: { id: true },
         orderBy: { _count: { id: "desc" } },
       }),
       prisma.project.groupBy({
         by: ["status"],
-        where: orgFilter,
+        where,
         _count: { id: true },
       }),
       prisma.project.aggregate({
-        where: orgFilter,
+        where,
         _sum: { budgetUsd: true, targetBeneficiaries: true },
       }),
       prisma.project.findMany({
-        where: orgFilter,
+        where,
         take: 5,
         orderBy: { createdAt: "desc" },
         include: {
@@ -84,9 +104,13 @@ export async function GET(request: NextRequest) {
         totalOrganizations,
         totalBudget: aggregates._sum.budgetUsd || 0,
         totalBeneficiaries: aggregates._sum.targetBeneficiaries || 0,
-        activeProjects: projectsByStatus.find((p) => p.status === "ACTIVE")?._count.id || 0,
-        plannedProjects: projectsByStatus.find((p) => p.status === "PLANNED")?._count.id || 0,
-        completedProjects: projectsByStatus.find((p) => p.status === "COMPLETED")?._count.id || 0,
+        activeProjects:
+          projectsByStatus.find((p) => p.status === "ACTIVE")?._count.id || 0,
+        plannedProjects:
+          projectsByStatus.find((p) => p.status === "PLANNED")?._count.id || 0,
+        completedProjects:
+          projectsByStatus.find((p) => p.status === "COMPLETED")?._count.id ||
+          0,
       },
       projectsByCountry: projectsByCountry.map((p) => ({
         countryCode: p.countryCode,
@@ -118,7 +142,7 @@ export async function GET(request: NextRequest) {
     console.error("Get analytics error:", error);
     return NextResponse.json(
       { error: "Failed to fetch analytics" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

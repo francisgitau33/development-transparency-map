@@ -110,33 +110,44 @@ enum ProjectVisibility {
 }
 
 model Project {
-  id                 String            @id @default(cuid())
-  title              String
-  description        String
-  organizationId     String
-  countryCode        String
-  adminArea1         String?
-  adminArea2         String?
-  sectorKey          String
-  status             ProjectStatus
-  visibility         ProjectVisibility @default(PENDING_REVIEW)
-  startDate          DateTime
-  endDate            DateTime?
-  budgetUsd          Float?
-  targetBeneficiaries Int?             // Number of people the project aims to reach/serve
-  latitude           Float
-  longitude          Float
-  locationName       String?
-  dataSource         String?
-  contactEmail       String?
-  createdByUserId    String
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
+  id                   String            @id @default(cuid())
+  title                String
+  description          String
+  organizationId       String
+  countryCode          String
+  adminArea1           String?
+  adminArea2           String?
+  administrativeAreaId String?
+  donorId              String?
+  sectorKey            String
+  status               ProjectStatus
+  visibility           ProjectVisibility @default(PENDING_REVIEW)
+  startDate            DateTime
+  endDate              DateTime?
+  budgetUsd            Float?
+  targetBeneficiaries  Int?              // Number of people the project aims to reach/serve
+  latitude             Float
+  longitude            Float
+  locationName         String?
+  dataSource           String?
+  contactEmail         String?
+  createdByUserId      String
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id])
-  createdBy    User         @relation("CreatedBy", fields: [createdByUserId], references: [id])
+  organization       Organization        @relation(fields: [organizationId], references: [id])
+  createdBy          User                @relation("CreatedBy", fields: [createdByUserId], references: [id])
+  administrativeArea AdministrativeArea? @relation(fields: [administrativeAreaId], references: [id])
+  donor              Donor?              @relation(fields: [donorId], references: [id])
 
   @@index([visibility])
+  @@index([administrativeAreaId])
+  @@index([donorId])
+  @@index([countryCode])
+  @@index([sectorKey])
+  @@index([status])
+  @@index([startDate])
+  @@index([endDate])
 }
 
 // Reference countries
@@ -153,6 +164,50 @@ model ReferenceCountry {
   sortOrder Int         @default(0)
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
+
+  administrativeAreas AdministrativeArea[]
+}
+
+// Administrative Area / District-County reference data.
+// Scoped to a ReferenceCountry. The `type` column captures the country's
+// local naming convention ("District", "County", "Region", "Province",
+// "State", …) so the UI can localise its label per-country in future.
+model AdministrativeArea {
+  id          String   @id @default(cuid())
+  name        String
+  type        String?  // e.g. District, County, Region, Province, State
+  countryCode String
+  active      Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  country  ReferenceCountry @relation(fields: [countryCode], references: [code])
+  projects Project[]
+
+  @@unique([countryCode, name])
+  @@index([countryCode])
+  @@index([active])
+  @@index([sortOrder])
+}
+
+// Donor reference data. Used to tag which funder(s) back a project so the
+// platform can answer "who funds what, where".
+model Donor {
+  id              String   @id @default(cuid())
+  name            String   @unique
+  donorType       String?  // Bilateral, Multilateral, Foundation, Corporate, Government, Individual, INGO, Pooled Fund, Other
+  countryOfOrigin String?
+  website         String?
+  active          Boolean  @default(true)
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  projects Project[]
+
+  @@index([active])
+  @@index([sortOrder])
 }
 
 // Reference sectors

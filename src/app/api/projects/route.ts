@@ -21,6 +21,11 @@ export async function GET(request: NextRequest) {
     const organizationType = searchParams.get("organizationType");
     const visibilityParam = searchParams.get("visibility");
     const forMap = searchParams.get("forMap") === "true";
+    const administrativeAreaId = searchParams.get("administrativeAreaId");
+    const donorId = searchParams.get("donorId");
+    const activeDuringYearParam = searchParams.get("activeDuringYear");
+    // `budgetTier` accepts a single tier or a comma-separated list.
+    const budgetTierParam = searchParams.get("budgetTier");
 
     // Distinguish public callers from authenticated dashboard callers.
     const session = await getSession();
@@ -44,6 +49,51 @@ export async function GET(request: NextRequest) {
     if (organizationType) {
       where.organization = { type: organizationType.toUpperCase() };
     }
+    if (administrativeAreaId) where.administrativeAreaId = administrativeAreaId;
+    if (donorId) where.donorId = donorId;
+
+    // Collect composable conditions into an AND list so later steps (the
+    // visibility RBAC branch) can freely use `OR` without clobbering us.
+    const andFilters: Record<string, unknown>[] = [];
+
+    // activeDuringYear: a project is "active during" a year iff its date
+    // range overlaps [Jan 1, Dec 31] of that year. A missing endDate is
+    // treated as "still active".
+    if (activeDuringYearParam) {
+      const year = Number.parseInt(activeDuringYearParam, 10);
+      if (!Number.isNaN(year) && year >= 1900 && year <= 2100) {
+        const yearStart = new Date(Date.UTC(year, 0, 1));
+        const yearEnd = new Date(Date.UTC(year, 11, 31, 23, 59, 59, 999));
+        andFilters.push({ startDate: { lte: yearEnd } });
+        andFilters.push({
+          OR: [{ endDate: null }, { endDate: { gte: yearStart } }],
+        });
+      }
+    }
+
+    // budgetTier: Micro <50k, Small 50k-<500k, Medium 500k-<2M, Large >=2M.
+    // Projects with null budgetUsd are excluded when a tier filter is set.
+    if (budgetTierParam) {
+      const tiers = budgetTierParam
+        .split(",")
+        .map((t) => t.trim().toUpperCase())
+        .filter(Boolean);
+      const ranges: Array<{ gte?: number; lt?: number }> = [];
+      for (const tier of tiers) {
+        if (tier === "MICRO") ranges.push({ lt: 50_000 });
+        else if (tier === "SMALL") ranges.push({ gte: 50_000, lt: 500_000 });
+        else if (tier === "MEDIUM")
+          ranges.push({ gte: 500_000, lt: 2_000_000 });
+        else if (tier === "LARGE") ranges.push({ gte: 2_000_000 });
+      }
+      if (ranges.length === 1) {
+        andFilters.push({ budgetUsd: ranges[0] });
+      } else if (ranges.length > 1) {
+        andFilters.push({
+          OR: ranges.map((r) => ({ budgetUsd: r })),
+        });
+      }
+    }
 
     // Visibility rules
     // -----------------
@@ -55,10 +105,12 @@ export async function GET(request: NextRequest) {
     if (!viewerRole || forMap) {
       where.visibility = "PUBLISHED";
     } else if (viewerRole === "PARTNER_ADMIN") {
-      where.OR = [
-        { organizationId: viewerOrgId },
-        { visibility: "PUBLISHED" },
-      ];
+      andFilters.push({
+        OR: [
+          { organizationId: viewerOrgId },
+          { visibility: "PUBLISHED" },
+        ],
+      });
     } else if (
       viewerRole === "SYSTEM_OWNER" &&
       visibilityParam &&
@@ -67,11 +119,21 @@ export async function GET(request: NextRequest) {
       where.visibility = visibilityParam.toUpperCase();
     }
 
+    if (andFilters.length > 0) {
+      where.AND = andFilters;
+    }
+
     const projects = await prisma.project.findMany({
       where,
       include: {
         organization: {
           select: { id: true, name: true, type: true },
+        },
+        administrativeArea: {
+          select: { id: true, name: true, type: true, countryCode: true },
+        },
+        donor: {
+          select: { id: true, name: true, donorType: true },
         },
       },
       orderBy: { createdAt: "desc" },
@@ -135,6 +197,55 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Reference-data sanity checks for Admin Area and Donor.
+    if (data.administrativeAreaId) {
+      const area = await prisma.administrativeArea.findUnique({
+        where: { id: String(data.administrativeAreaId) },
+      });
+      if (!area) {
+        return NextResponse.json(
+          { error: "Selected district / county was not found" },
+          { status: 400 },
+        );
+      }
+      if (!area.active) {
+        return NextResponse.json(
+          { error: "Selected district / county is not active" },
+          { status: 400 },
+        );
+      }
+      if (
+        data.countryCode &&
+        area.countryCode !== String(data.countryCode).toUpperCase()
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "Selected district / county does not belong to the selected country",
+          },
+          { status: 400 },
+        );
+      }
+    }
+
+    if (data.donorId) {
+      const donor = await prisma.donor.findUnique({
+        where: { id: String(data.donorId) },
+      });
+      if (!donor) {
+        return NextResponse.json(
+          { error: "Selected donor was not found" },
+          { status: 400 },
+        );
+      }
+      if (!donor.active) {
+        return NextResponse.json(
+          { error: "Selected donor is not active" },
+          { status: 400 },
+        );
+      }
+    }
+
     const validation = validateProject(data);
     if (!validation.valid) {
       return NextResponse.json(
@@ -170,6 +281,12 @@ export async function POST(request: NextRequest) {
       include: {
         organization: {
           select: { id: true, name: true, type: true },
+        },
+        administrativeArea: {
+          select: { id: true, name: true, type: true, countryCode: true },
+        },
+        donor: {
+          select: { id: true, name: true, donorType: true },
         },
       },
     });

@@ -34,10 +34,23 @@ interface Project {
   latitude: number;
   longitude: number;
   locationName: string | null;
+  administrativeAreaId: string | null;
+  donorId: string | null;
   organization: {
     id: string;
     name: string;
   };
+  administrativeArea?: {
+    id: string;
+    name: string;
+    type: string | null;
+    countryCode: string;
+  } | null;
+  donor?: {
+    id: string;
+    name: string;
+    donorType: string | null;
+  } | null;
 }
 
 interface Country {
@@ -57,12 +70,30 @@ interface Organization {
   name: string;
 }
 
+interface AdministrativeArea {
+  id: string;
+  name: string;
+  type: string | null;
+  countryCode: string;
+  active: boolean;
+}
+
+interface Donor {
+  id: string;
+  name: string;
+  donorType: string | null;
+}
+
 export default function ProjectsPage() {
   const { isSystemOwner } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [countries, setCountries] = useState<Country[]>([]);
   const [sectors, setSectors] = useState<Sector[]>([]);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [administrativeAreas, setAdministrativeAreas] = useState<
+    AdministrativeArea[]
+  >([]);
+  const [donors, setDonors] = useState<Donor[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -86,32 +117,48 @@ export default function ProjectsPage() {
     latitude: "",
     longitude: "",
     locationName: "",
+    administrativeAreaId: "",
+    donorId: "",
   });
 
   const fetchData = async () => {
     setLoading(true);
     setError(null);
     try {
-      const [projectsRes, countriesRes, sectorsRes, orgsRes] = await Promise.all([
-        fetch("/api/projects"),
-        fetch("/api/reference/countries?activeOnly=true"),
-        fetch("/api/reference/sectors?activeOnly=true"),
-        fetch("/api/organizations?activeOnly=true"),
-      ]);
+      const [projectsRes, countriesRes, sectorsRes, orgsRes, areasRes, donorsRes] =
+        await Promise.all([
+          fetch("/api/projects"),
+          fetch("/api/reference/countries?activeOnly=true"),
+          fetch("/api/reference/sectors?activeOnly=true"),
+          fetch("/api/organizations?activeOnly=true"),
+          fetch("/api/reference/administrative-areas?activeOnly=true"),
+          fetch("/api/reference/donors?activeOnly=true"),
+        ]);
 
       if (!projectsRes.ok) throw new Error("Failed to load projects");
 
-      const [projectsData, countriesData, sectorsData, orgsData] = await Promise.all([
+      const [
+        projectsData,
+        countriesData,
+        sectorsData,
+        orgsData,
+        areasData,
+        donorsData,
+      ] = await Promise.all([
         projectsRes.json(),
         countriesRes.json(),
         sectorsRes.json(),
         orgsRes.json(),
+        areasRes.ok ? areasRes.json() : { administrativeAreas: [] },
+        donorsRes.ok ? donorsRes.json() : { donors: [] },
       ]);
 
       setProjects(projectsData.projects || []);
       setCountries(countriesData.countries || []);
       setSectors(sectorsData.sectors || []);
       setOrganizations(orgsData.organizations || []);
+      setAdministrativeAreas(areasData.administrativeAreas || []);
+      setDonors(donorsData.donors || []);
     } catch (err) {
       setError("Unable to load projects. Please try again.");
     } finally {
@@ -139,6 +186,8 @@ export default function ProjectsPage() {
       latitude: "",
       longitude: "",
       locationName: "",
+      administrativeAreaId: "",
+      donorId: "",
     });
     setEditingProject(null);
   };
@@ -161,6 +210,8 @@ export default function ProjectsPage() {
         latitude: project.latitude.toString(),
         longitude: project.longitude.toString(),
         locationName: project.locationName || "",
+        administrativeAreaId: project.administrativeAreaId || "",
+        donorId: project.donorId || "",
       });
     } else {
       resetForm();
@@ -185,6 +236,8 @@ export default function ProjectsPage() {
           targetBeneficiaries: formData.targetBeneficiaries ? Number.parseInt(formData.targetBeneficiaries) : null,
           latitude: Number.parseFloat(formData.latitude),
           longitude: Number.parseFloat(formData.longitude),
+          administrativeAreaId: formData.administrativeAreaId || null,
+          donorId: formData.donorId || null,
         }),
       });
 
@@ -302,7 +355,9 @@ export default function ProjectsPage() {
                 <TableRow>
                   <TableHead>Project</TableHead>
                   <TableHead>Organization</TableHead>
-                  <TableHead>Location</TableHead>
+                  <TableHead>Country</TableHead>
+                  <TableHead>District / County</TableHead>
+                  <TableHead>Donor</TableHead>
                   <TableHead>Sector</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Visibility</TableHead>
@@ -326,11 +381,29 @@ export default function ProjectsPage() {
                       </div>
                     </TableCell>
                     <TableCell>
+                      {project.administrativeArea ? (
+                        <span className="text-slate-700">
+                          {project.administrativeArea.name}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 text-sm">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {project.donor ? (
+                        <span className="text-slate-700">
+                          {project.donor.name}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 text-sm">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
                       <div className="flex items-center gap-2">
-                        <SectorIcon 
-                          iconKey={getSector(project.sectorKey)?.icon} 
-                          color={getSector(project.sectorKey)?.color} 
-                          size="sm" 
+                        <SectorIcon
+                          iconKey={getSector(project.sectorKey)?.icon}
+                          color={getSector(project.sectorKey)?.color}
+                          size="sm"
                         />
                         {getSectorName(project.sectorKey)}
                       </div>
@@ -463,7 +536,15 @@ export default function ProjectsPage() {
                   <Label htmlFor="countryCode">Country *</Label>
                   <Select
                     value={formData.countryCode}
-                    onValueChange={(value) => setFormData({ ...formData, countryCode: value })}
+                    onValueChange={(value) =>
+                      setFormData({
+                        ...formData,
+                        countryCode: value,
+                        // Reset district when country changes — districts are
+                        // country-scoped.
+                        administrativeAreaId: "",
+                      })
+                    }
                   >
                     <SelectTrigger id="countryCode">
                       <SelectValue placeholder="Select country" />
@@ -630,6 +711,85 @@ export default function ProjectsPage() {
                   onChange={(e) => setFormData({ ...formData, targetBeneficiaries: e.target.value })}
                   placeholder="Number of people the project aims to reach"
                 />
+              </div>
+
+              <div
+                data-design-id="project-admin-donor-row"
+                className="grid grid-cols-2 gap-4"
+              >
+                <div className="grid gap-2" data-design-id="project-admin-area-field">
+                  <Label htmlFor="administrativeAreaId">District / County</Label>
+                  <Select
+                    value={formData.administrativeAreaId || "_none"}
+                    onValueChange={(v) =>
+                      setFormData({
+                        ...formData,
+                        administrativeAreaId: v === "_none" ? "" : v,
+                      })
+                    }
+                    disabled={!formData.countryCode}
+                  >
+                    <SelectTrigger id="administrativeAreaId">
+                      <SelectValue
+                        placeholder={
+                          formData.countryCode
+                            ? "Select district / county"
+                            : "Select a country first"
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_none">— None —</SelectItem>
+                      {administrativeAreas
+                        .filter(
+                          (a) =>
+                            !formData.countryCode ||
+                            a.countryCode === formData.countryCode,
+                        )
+                        .map((a) => (
+                          <SelectItem key={a.id} value={a.id}>
+                            {a.name}
+                            {a.type ? ` · ${a.type}` : ""}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                  {formData.countryCode &&
+                    administrativeAreas.filter(
+                      (a) => a.countryCode === formData.countryCode,
+                    ).length === 0 && (
+                      <p className="text-xs text-amber-600">
+                        No active districts / counties for this country. A System
+                        Owner can add them under CMS → Districts / Counties.
+                      </p>
+                    )}
+                </div>
+
+                <div className="grid gap-2" data-design-id="project-donor-field">
+                  <Label htmlFor="donorId">Donor</Label>
+                  <Select
+                    value={formData.donorId || "_none"}
+                    onValueChange={(v) =>
+                      setFormData({
+                        ...formData,
+                        donorId: v === "_none" ? "" : v,
+                      })
+                    }
+                  >
+                    <SelectTrigger id="donorId">
+                      <SelectValue placeholder="Select donor (optional)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_none">— None —</SelectItem>
+                      {donors.map((d) => (
+                        <SelectItem key={d.id} value={d.id}>
+                          {d.name}
+                          {d.donorType ? ` · ${d.donorType}` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
 

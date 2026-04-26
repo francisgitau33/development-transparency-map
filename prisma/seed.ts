@@ -190,6 +190,95 @@ async function main() {
   }
   console.log(`Seeded ${sectors.length} sectors`);
 
+  // Seed reference administrative areas. Covers at least two countries with
+  // 3+ districts/counties each so dev flows (form dropdowns, filters, reports)
+  // are exercised against real data.
+  const administrativeAreas = [
+    // Kenya — counties
+    { countryCode: "KE", name: "Nairobi County", type: "County", sortOrder: 1 },
+    { countryCode: "KE", name: "Kisumu County", type: "County", sortOrder: 2 },
+    { countryCode: "KE", name: "Mombasa County", type: "County", sortOrder: 3 },
+    { countryCode: "KE", name: "Turkana County", type: "County", sortOrder: 4 },
+    // Uganda — districts
+    { countryCode: "UG", name: "Kampala District", type: "District", sortOrder: 1 },
+    { countryCode: "UG", name: "Gulu District", type: "District", sortOrder: 2 },
+    { countryCode: "UG", name: "Mbarara District", type: "District", sortOrder: 3 },
+    // Tanzania — regions
+    { countryCode: "TZ", name: "Dar es Salaam Region", type: "Region", sortOrder: 1 },
+    { countryCode: "TZ", name: "Arusha Region", type: "Region", sortOrder: 2 },
+    { countryCode: "TZ", name: "Mwanza Region", type: "Region", sortOrder: 3 },
+  ];
+
+  for (const area of administrativeAreas) {
+    await prisma.administrativeArea.upsert({
+      where: {
+        countryCode_name: {
+          countryCode: area.countryCode,
+          name: area.name,
+        },
+      },
+      update: {},
+      create: area,
+    });
+  }
+  console.log(`Seeded ${administrativeAreas.length} administrative areas`);
+
+  // Seed reference donors. The names mirror the PRD-level examples across
+  // donor types (Bilateral, Multilateral, Foundation, Corporate, Government).
+  const donors = [
+    {
+      name: "USAID",
+      donorType: "Bilateral",
+      countryOfOrigin: "US",
+      website: "https://www.usaid.gov",
+      sortOrder: 1,
+    },
+    {
+      name: "FCDO (UK)",
+      donorType: "Bilateral",
+      countryOfOrigin: "GB",
+      website: "https://www.gov.uk/government/organisations/foreign-commonwealth-development-office",
+      sortOrder: 2,
+    },
+    {
+      name: "World Bank",
+      donorType: "Multilateral",
+      countryOfOrigin: null,
+      website: "https://www.worldbank.org",
+      sortOrder: 3,
+    },
+    {
+      name: "Bill & Melinda Gates Foundation",
+      donorType: "Foundation",
+      countryOfOrigin: "US",
+      website: "https://www.gatesfoundation.org",
+      sortOrder: 4,
+    },
+    {
+      name: "European Union",
+      donorType: "Multilateral",
+      countryOfOrigin: null,
+      website: "https://international-partnerships.ec.europa.eu",
+      sortOrder: 5,
+    },
+    {
+      name: "Global Fund",
+      donorType: "Pooled Fund",
+      countryOfOrigin: null,
+      website: "https://www.theglobalfund.org",
+      sortOrder: 6,
+    },
+  ];
+
+  for (const donor of donors) {
+    await prisma.donor.upsert({
+      where: { name: donor.name },
+      update: {},
+      create: donor,
+    });
+  }
+  console.log(`Seeded ${donors.length} donors`);
+
   // Seed default CMS about content
   const existingAbout = await prisma.cmsAbout.findFirst();
   if (!existingAbout) {

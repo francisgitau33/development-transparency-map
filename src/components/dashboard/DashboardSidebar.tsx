@@ -13,6 +13,8 @@ import {
   User,
   LogOut,
   Globe,
+  Map as MapIcon,
+  HandCoins,
 } from "lucide-react";
 import { BRANDING, DASHBOARD_NAV } from "@/lib/branding";
 import { useAuth } from "@/lib/auth-context";
@@ -26,6 +28,9 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   BarChart3,
   FileText,
   Users,
+  Map: MapIcon,
+  HandCoins,
+  Globe,
 };
 
 export function DashboardSidebar() {

@@ -36,6 +36,18 @@ export const DASHBOARD_NAV: readonly DashboardNavItem[] = [
   { label: "Bulk Upload", href: "/dashboard/upload", icon: "Upload" },
   { label: "Reports", href: "/dashboard/reports", icon: "BarChart3" },
   { label: "CMS", href: "/dashboard/cms", icon: "FileText", systemOwnerOnly: true },
+  {
+    label: "Districts / Counties",
+    href: "/dashboard/cms/administrative-areas",
+    icon: "Map",
+    systemOwnerOnly: true,
+  },
+  {
+    label: "Donors",
+    href: "/dashboard/cms/donors",
+    icon: "HandCoins",
+    systemOwnerOnly: true,
+  },
   { label: "Users", href: "/dashboard/users", icon: "Users", systemOwnerOnly: true },
 ];
 

@@ -20,6 +20,15 @@ interface Project {
     name: string;
     type: string;
   };
+  administrativeArea?: {
+    id: string;
+    name: string;
+    type: string | null;
+  } | null;
+  donor?: {
+    id: string;
+    name: string;
+  } | null;
 }
 
 interface Sector {
@@ -109,15 +118,28 @@ export function MapComponent({ projects, sectors, onProjectClick }: MapComponent
 
       const marker = L.marker([project.latitude, project.longitude], { icon });
 
+      // escape minimal HTML injection via title/description etc.
+      const esc = (s: string) =>
+        s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+      const districtLine = project.administrativeArea
+        ? `<p style="margin: 0 0 4px 0; font-size: 12px; color: #64748b;"><strong>District / County:</strong> ${esc(project.administrativeArea.name)}${project.administrativeArea.type ? ` (${esc(project.administrativeArea.type)})` : ""}</p>`
+        : "";
+      const donorLine = project.donor
+        ? `<p style="margin: 0 0 4px 0; font-size: 12px; color: #64748b;"><strong>Donor:</strong> ${esc(project.donor.name)}</p>`
+        : "";
+
       const popupContent = `
         <div style="min-width: 220px; font-family: system-ui, sans-serif;">
-          <h3 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600; color: #1e293b;">${project.title}</h3>
-          <p style="margin: 0 0 4px 0; font-size: 12px; color: #64748b;"><strong>Organization:</strong> ${project.organization.name}</p>
-          <p style="margin: 0 0 4px 0; font-size: 12px; color: #64748b;"><strong>Sector:</strong> ${getSectorName(project.sectorKey)}</p>
-          ${project.locationName ? `<p style="margin: 0 0 4px 0; font-size: 12px; color: #64748b;"><strong>Location:</strong> ${project.locationName}</p>` : ""}
+          <h3 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600; color: #1e293b;">${esc(project.title)}</h3>
+          <p style="margin: 0 0 4px 0; font-size: 12px; color: #64748b;"><strong>Organization:</strong> ${esc(project.organization.name)}</p>
+          <p style="margin: 0 0 4px 0; font-size: 12px; color: #64748b;"><strong>Sector:</strong> ${esc(getSectorName(project.sectorKey))}</p>
+          ${project.locationName ? `<p style="margin: 0 0 4px 0; font-size: 12px; color: #64748b;"><strong>Location:</strong> ${esc(project.locationName)}</p>` : ""}
+          ${districtLine}
+          ${donorLine}
           <p style="margin: 0 0 4px 0; font-size: 12px; color: #64748b;"><strong>Target Beneficiaries:</strong> ${formatNumber(project.targetBeneficiaries)}</p>
           <p style="margin: 0 0 4px 0; font-size: 12px; color: #64748b;"><strong>Status:</strong> <span style="display: inline-block; padding: 2px 8px; background: ${project.status === "ACTIVE" ? "#dcfce7" : project.status === "PLANNED" ? "#fef3c7" : "#e2e8f0"}; color: ${project.status === "ACTIVE" ? "#166534" : project.status === "PLANNED" ? "#92400e" : "#475569"}; border-radius: 9999px; font-size: 11px;">${project.status}</span></p>
-          <p style="margin: 8px 0 0 0; font-size: 12px; color: #475569; line-height: 1.4;">${project.description.substring(0, 150)}${project.description.length > 150 ? "..." : ""}</p>
+          <p style="margin: 8px 0 0 0; font-size: 12px; color: #475569; line-height: 1.4;">${esc(project.description.substring(0, 150))}${project.description.length > 150 ? "..." : ""}</p>
           <a href="/projects/${project.id}" target="_blank" rel="noopener noreferrer" style="display: inline-block; margin-top: 10px; padding: 6px 12px; background: #0284c7; color: white; border-radius: 6px; font-size: 12px; text-decoration: none; font-weight: 500;">View Details</a>
         </div>
       `;

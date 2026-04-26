@@ -94,6 +94,22 @@ async function main() {
 
   console.log(`✓ Found SYSTEM_OWNER: ${systemOwner.email}\n`);
 
+  // Preload reference admin areas / donors so mock projects can be linked.
+  // The main seed must have created these before this script runs.
+  const [areas, donors] = await Promise.all([
+    prisma.administrativeArea.findMany(),
+    prisma.donor.findMany(),
+  ]);
+  const areaIndexByCountry = new Map<string, typeof areas>();
+  for (const a of areas) {
+    const list = areaIndexByCountry.get(a.countryCode) ?? [];
+    list.push(a);
+    areaIndexByCountry.set(a.countryCode, list);
+  }
+  console.log(
+    `✓ Linking to ${areas.length} admin areas, ${donors.length} donors\n`,
+  );
+
   // Create organizations
   console.log("📁 Creating organizations...");
   const orgMap: Record<string, string> = {};
@@ -126,6 +142,8 @@ async function main() {
   console.log("📊 Importing projects...");
   let created = 0;
   let skipped = 0;
+  // Cycle through donors round-robin so mock projects link to a mix of funders.
+  let donorCursor = 0;
 
   for (let i = 1; i < lines.length; i++) {
     const values = parseCSVLine(lines[i]);
@@ -161,7 +179,16 @@ async function main() {
       continue;
     }
 
-    // Create project
+    // Pick an admin area and donor so mock projects populate the new
+    // reference-data dropdowns and filters.
+    const areasForCountry = areaIndexByCountry.get(row.countryCode) ?? [];
+    const pickedArea =
+      areasForCountry.length > 0
+        ? areasForCountry[i % areasForCountry.length]
+        : null;
+    const pickedDonor =
+      donors.length > 0 ? donors[donorCursor++ % donors.length] : null;
+
     await prisma.project.create({
       data: {
         title: row.title,
@@ -182,6 +209,8 @@ async function main() {
         locationName: row.locationName || null,
         dataSource: row.dataSource || null,
         contactEmail: row.contactEmail || null,
+        administrativeAreaId: pickedArea?.id ?? null,
+        donorId: pickedDonor?.id ?? null,
         createdByUserId: systemOwner.id,
       },
     });

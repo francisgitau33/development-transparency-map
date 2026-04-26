@@ -35,11 +35,24 @@ interface Project {
   status: string;
   locationName: string | null;
   targetBeneficiaries: number | null;
+  administrativeAreaId: string | null;
+  donorId: string | null;
   organization: {
     id: string;
     name: string;
     type: string;
   };
+  administrativeArea?: {
+    id: string;
+    name: string;
+    type: string | null;
+    countryCode: string;
+  } | null;
+  donor?: {
+    id: string;
+    name: string;
+    donorType: string | null;
+  } | null;
 }
 
 interface Country {
@@ -54,10 +67,26 @@ interface Sector {
   color: string;
 }
 
+interface AdministrativeArea {
+  id: string;
+  name: string;
+  type: string | null;
+  countryCode: string;
+}
+
+interface Donor {
+  id: string;
+  name: string;
+}
+
 export default function MapPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [countries, setCountries] = useState<Country[]>([]);
   const [sectors, setSectors] = useState<Sector[]>([]);
+  const [administrativeAreas, setAdministrativeAreas] = useState<
+    AdministrativeArea[]
+  >([]);
+  const [donors, setDonors] = useState<Donor[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -65,30 +94,40 @@ export default function MapPage() {
   const [sectorFilter, setSectorFilter] = useState<string>("_all");
   const [statusFilter, setStatusFilter] = useState<string>("_all");
   const [orgTypeFilter, setOrgTypeFilter] = useState<string>("_all");
+  const [districtFilter, setDistrictFilter] = useState<string>("_all");
+  const [donorFilter, setDonorFilter] = useState<string>("_all");
 
   const fetchData = async () => {
     setLoading(true);
     setError(null);
     try {
-      const [projectsRes, countriesRes, sectorsRes] = await Promise.all([
-        fetch("/api/projects?forMap=true"),
-        fetch("/api/reference/countries?activeOnly=true"),
-        fetch("/api/reference/sectors?activeOnly=true"),
-      ]);
+      const [projectsRes, countriesRes, sectorsRes, areasRes, donorsRes] =
+        await Promise.all([
+          fetch("/api/projects?forMap=true"),
+          fetch("/api/reference/countries?activeOnly=true"),
+          fetch("/api/reference/sectors?activeOnly=true"),
+          fetch("/api/reference/administrative-areas?activeOnly=true"),
+          fetch("/api/reference/donors?activeOnly=true"),
+        ]);
 
       if (!projectsRes.ok || !countriesRes.ok || !sectorsRes.ok) {
         throw new Error("Failed to load data");
       }
 
-      const [projectsData, countriesData, sectorsData] = await Promise.all([
-        projectsRes.json(),
-        countriesRes.json(),
-        sectorsRes.json(),
-      ]);
+      const [projectsData, countriesData, sectorsData, areasData, donorsData] =
+        await Promise.all([
+          projectsRes.json(),
+          countriesRes.json(),
+          sectorsRes.json(),
+          areasRes.ok ? areasRes.json() : { administrativeAreas: [] },
+          donorsRes.ok ? donorsRes.json() : { donors: [] },
+        ]);
 
       setProjects(projectsData.projects || []);
       setCountries(countriesData.countries || []);
       setSectors(sectorsData.sectors || []);
+      setAdministrativeAreas(areasData.administrativeAreas || []);
+      setDonors(donorsData.donors || []);
     } catch (err) {
       setError("Unable to load map data. Please try again.");
     } finally {
@@ -106,18 +145,53 @@ export default function MapPage() {
       if (sectorFilter !== "_all" && project.sectorKey !== sectorFilter) return false;
       if (statusFilter !== "_all" && project.status !== statusFilter) return false;
       if (orgTypeFilter !== "_all" && project.organization.type !== orgTypeFilter) return false;
+      if (
+        districtFilter !== "_all" &&
+        project.administrativeAreaId !== districtFilter
+      ) {
+        return false;
+      }
+      if (donorFilter !== "_all" && project.donorId !== donorFilter) {
+        return false;
+      }
       return true;
     });
-  }, [projects, countryFilter, sectorFilter, statusFilter, orgTypeFilter]);
+  }, [
+    projects,
+    countryFilter,
+    sectorFilter,
+    statusFilter,
+    orgTypeFilter,
+    districtFilter,
+    donorFilter,
+  ]);
+
+  // Reset district when country changes (scoping is country-specific).
+  useEffect(() => {
+    setDistrictFilter("_all");
+  }, [countryFilter]);
+
+  const availableDistricts = useMemo(() => {
+    if (countryFilter === "_all") return administrativeAreas;
+    return administrativeAreas.filter((a) => a.countryCode === countryFilter);
+  }, [administrativeAreas, countryFilter]);
 
   const clearFilters = () => {
     setCountryFilter("_all");
     setSectorFilter("_all");
     setStatusFilter("_all");
     setOrgTypeFilter("_all");
+    setDistrictFilter("_all");
+    setDonorFilter("_all");
   };
 
-  const hasFilters = countryFilter !== "_all" || sectorFilter !== "_all" || statusFilter !== "_all" || orgTypeFilter !== "_all";
+  const hasFilters =
+    countryFilter !== "_all" ||
+    sectorFilter !== "_all" ||
+    statusFilter !== "_all" ||
+    orgTypeFilter !== "_all" ||
+    districtFilter !== "_all" ||
+    donorFilter !== "_all";
 
   const [legendExpanded, setLegendExpanded] = useState(true);
 
@@ -205,6 +279,53 @@ export default function MapPage() {
                 <SelectItem value="FOUNDATION">Foundation</SelectItem>
                 <SelectItem value="GOVERNMENT">Government</SelectItem>
                 <SelectItem value="OTHER">Other</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={districtFilter}
+              onValueChange={setDistrictFilter}
+              disabled={countryFilter === "_all"}
+            >
+              <SelectTrigger
+                data-design-id="map-filter-district"
+                className="w-[200px]"
+                title={
+                  countryFilter === "_all"
+                    ? "Select a country to filter by District / County"
+                    : undefined
+                }
+              >
+                <SelectValue
+                  placeholder={
+                    countryFilter === "_all"
+                      ? "Select country first"
+                      : "All Districts / Counties"
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent className="z-[1100]">
+                <SelectItem value="_all">All Districts / Counties</SelectItem>
+                {availableDistricts.map((a) => (
+                  <SelectItem key={a.id} value={a.id}>
+                    {a.name}
+                    {a.type ? ` · ${a.type}` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={donorFilter} onValueChange={setDonorFilter}>
+              <SelectTrigger data-design-id="map-filter-donor" className="w-[160px]">
+                <SelectValue placeholder="All Donors" />
+              </SelectTrigger>
+              <SelectContent className="z-[1100]">
+                <SelectItem value="_all">All Donors</SelectItem>
+                {donors.map((d) => (
+                  <SelectItem key={d.id} value={d.id}>
+                    {d.name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
 

@@ -22,6 +22,9 @@ interface CSVRow {
   locationName?: string;
   dataSource?: string;
   contactEmail?: string;
+  // New reference-data columns. Supplied by name; resolved to ids below.
+  districtCounty?: string;
+  donor?: string;
 }
 
 interface RowError {
@@ -75,11 +78,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const [countries, sectors, organization] = await Promise.all([
-      prisma.referenceCountry.findMany({ where: { active: true } }),
-      prisma.referenceSector.findMany({ where: { active: true } }),
-      prisma.organization.findUnique({ where: { id: organizationId } }),
-    ]);
+    const [countries, sectors, organization, allAreas, allDonors] =
+      await Promise.all([
+        prisma.referenceCountry.findMany({ where: { active: true } }),
+        prisma.referenceSector.findMany({ where: { active: true } }),
+        prisma.organization.findUnique({ where: { id: organizationId } }),
+        prisma.administrativeArea.findMany(),
+        prisma.donor.findMany(),
+      ]);
 
     if (!organization) {
       return NextResponse.json(
@@ -91,6 +97,20 @@ export async function POST(request: NextRequest) {
     const countrySet = new Set(countries.map((c) => c.code));
     const sectorSet = new Set(sectors.map((s) => s.key));
 
+    // Index admin areas by (countryCode, lowercased name) for O(1) resolution.
+    // We deliberately keep inactive rows too so we can emit a distinct
+    // "not active" error rather than "not found".
+    const areaIndex = new Map<string, (typeof allAreas)[number]>();
+    for (const a of allAreas) {
+      areaIndex.set(`${a.countryCode}::${a.name.toLowerCase()}`, a);
+    }
+
+    // Donor name is globally unique; index case-insensitively.
+    const donorIndex = new Map<string, (typeof allDonors)[number]>();
+    for (const d of allDonors) {
+      donorIndex.set(d.name.toLowerCase(), d);
+    }
+
     const validRows: unknown[] = [];
     const errorRows: RowError[] = [];
 
@@ -101,6 +121,8 @@ export async function POST(request: NextRequest) {
 
       const countryCode = row.countryCode?.toUpperCase().trim();
       const sectorKey = row.sectorKey?.toUpperCase().trim();
+      const countryName =
+        countries.find((c) => c.code === countryCode)?.name || countryCode;
 
       if (countryCode && !countrySet.has(countryCode)) {
         errors.push(`Invalid country code: ${countryCode}`);
@@ -108,6 +130,48 @@ export async function POST(request: NextRequest) {
 
       if (sectorKey && !sectorSet.has(sectorKey)) {
         errors.push(`Invalid sector: ${sectorKey}`);
+      }
+
+      // Resolve districtCounty → administrativeAreaId by name, country-scoped.
+      // CSV upload deliberately does NOT auto-create districts/counties or
+      // donors — the System Owner must create them first.
+      let administrativeAreaId: string | undefined;
+      const districtName = row.districtCounty?.trim();
+      if (districtName) {
+        if (!countryCode || !countrySet.has(countryCode)) {
+          errors.push(
+            `District / County '${districtName}' cannot be resolved because the country is missing or invalid.`,
+          );
+        } else {
+          const found = areaIndex.get(
+            `${countryCode}::${districtName.toLowerCase()}`,
+          );
+          if (!found) {
+            errors.push(
+              `District / County '${districtName}' was not found for country '${countryName}'.`,
+            );
+          } else if (!found.active) {
+            errors.push(
+              `District / County '${districtName}' is not active.`,
+            );
+          } else {
+            administrativeAreaId = found.id;
+          }
+        }
+      }
+
+      // Resolve donor → donorId by name.
+      let donorId: string | undefined;
+      const donorName = row.donor?.trim();
+      if (donorName) {
+        const found = donorIndex.get(donorName.toLowerCase());
+        if (!found) {
+          errors.push(`Donor '${donorName}' was not found or is inactive.`);
+        } else if (!found.active) {
+          errors.push(`Donor '${donorName}' is not active.`);
+        } else {
+          donorId = found.id;
+        }
       }
 
       const projectData = {
@@ -125,6 +189,8 @@ export async function POST(request: NextRequest) {
         targetBeneficiaries: row.targetBeneficiaries,
         adminArea1: row.adminArea1,
         adminArea2: row.adminArea2,
+        administrativeAreaId,
+        donorId,
         locationName: row.locationName,
         dataSource: row.dataSource,
         contactEmail: row.contactEmail,

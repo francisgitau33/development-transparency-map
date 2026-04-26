@@ -27,6 +27,18 @@ export async function GET(
         createdBy: {
           select: { id: true, email: true, displayName: true },
         },
+        administrativeArea: {
+          select: { id: true, name: true, type: true, countryCode: true },
+        },
+        donor: {
+          select: {
+            id: true,
+            name: true,
+            donorType: true,
+            countryOfOrigin: true,
+            website: true,
+          },
+        },
       },
     });
 
@@ -170,6 +182,54 @@ export async function PUT(
       }
     }
 
+    // Validate district / county linkage against the (possibly updated)
+    // country code. Accept `null` as "detach the admin area".
+    if (data.administrativeAreaId) {
+      const area = await prisma.administrativeArea.findUnique({
+        where: { id: String(data.administrativeAreaId) },
+      });
+      if (!area) {
+        return NextResponse.json(
+          { error: "Selected district / county was not found" },
+          { status: 400 },
+        );
+      }
+      if (!area.active) {
+        return NextResponse.json(
+          { error: "Selected district / county is not active" },
+          { status: 400 },
+        );
+      }
+      const effectiveCountry = countryCode ?? existingProject.countryCode;
+      if (area.countryCode !== effectiveCountry) {
+        return NextResponse.json(
+          {
+            error:
+              "Selected district / county does not belong to the selected country",
+          },
+          { status: 400 },
+        );
+      }
+    }
+
+    if (data.donorId) {
+      const donor = await prisma.donor.findUnique({
+        where: { id: String(data.donorId) },
+      });
+      if (!donor) {
+        return NextResponse.json(
+          { error: "Selected donor was not found" },
+          { status: 400 },
+        );
+      }
+      if (!donor.active) {
+        return NextResponse.json(
+          { error: "Selected donor is not active" },
+          { status: 400 },
+        );
+      }
+    }
+
     const validation = validateProject(data);
     if (!validation.valid) {
       return NextResponse.json(
@@ -207,6 +267,12 @@ export async function PUT(
       include: {
         organization: {
           select: { id: true, name: true, type: true },
+        },
+        administrativeArea: {
+          select: { id: true, name: true, type: true, countryCode: true },
+        },
+        donor: {
+          select: { id: true, name: true, donorType: true },
         },
       },
     });

@@ -52,8 +52,8 @@ interface UploadJob {
   uploadedBy: { email: string; displayName: string | null };
 }
 
-const CSV_TEMPLATE = `title,description,countryCode,sectorKey,status,startDate,endDate,latitude,longitude,budgetUsd,locationName,dataSource,contactEmail
-"Sample Project","Description of the project",US,HEALTH,ACTIVE,2024-01-01,2024-12-31,40.7128,-74.0060,100000,"New York, NY","Field Survey",contact@example.org`;
+const CSV_TEMPLATE = `title,description,countryCode,sectorKey,status,startDate,endDate,latitude,longitude,budgetUsd,targetBeneficiaries,districtCounty,donor,locationName,dataSource,contactEmail
+"Sample Project","Description of the project",US,HEALTH,ACTIVE,2024-01-01,2024-12-31,40.7128,-74.0060,100000,1500,"New York County","USAID","New York, NY","Field Survey",contact@example.org`;
 
 export default function UploadPage() {
   const { isSystemOwner, user } = useAuth();
@@ -378,6 +378,20 @@ export default function UploadPage() {
                     <li>startDate (YYYY-MM-DD)</li>
                     <li>latitude</li>
                     <li>longitude</li>
+                  </ul>
+                  <p className="mt-3"><strong>Optional fields:</strong></p>
+                  <ul className="list-disc list-inside">
+                    <li>endDate, budgetUsd, targetBeneficiaries</li>
+                    <li>
+                      <code>districtCounty</code> — must match an active
+                      District / County name for the given country (managed in
+                      CMS)
+                    </li>
+                    <li>
+                      <code>donor</code> — must match an active Donor name
+                      (managed in CMS)
+                    </li>
+                    <li>locationName, dataSource, contactEmail</li>
                   </ul>
                 </div>
               </CardContent>
