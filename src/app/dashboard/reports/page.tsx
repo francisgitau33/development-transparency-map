@@ -48,7 +48,6 @@ import {
   AlertTriangle,
   Building2,
   CalendarClock,
-  Clock,
   DollarSign,
   Filter,
   FolderOpen,
@@ -206,6 +205,139 @@ interface Analytics {
   role: "SYSTEM_OWNER" | "PARTNER_ADMIN";
 }
 
+// ---------------------------------------------------------------------------
+// Funding-cliff analytics (served by /api/reports/funding-cliffs).
+// ---------------------------------------------------------------------------
+
+type RiskLevel = "Low" | "Moderate" | "High" | "Severe" | "Insufficient data";
+
+interface CliffSummary {
+  activeBudget: number;
+  expiringBudget: number;
+  plannedReplacementBudget: number;
+  netExposure: number;
+  cliffRiskPercent: number | null;
+  riskLevel: RiskLevel;
+  activeProjectCount: number;
+  expiringProjectCount: number;
+  plannedReplacementProjectCount: number;
+}
+
+interface CliffGroupRow {
+  key: string;
+  name: string;
+  subLabel?: string | null;
+  activeBudget: number;
+  expiringBudget: number;
+  plannedReplacementBudget: number;
+  netExposure: number;
+  cliffRiskPercent: number | null;
+  riskLevel: RiskLevel;
+  activeProjectCount: number;
+  expiringProjectCount: number;
+}
+
+interface CliffMatrixCell {
+  districtId: string;
+  sectorKey: string;
+  activeBudget: number;
+  expiringBudget: number;
+  plannedReplacementBudget: number;
+  netExposure: number;
+  cliffRiskPercent: number | null;
+  riskLevel: RiskLevel;
+}
+interface CliffMatrix {
+  rows: Array<{ id: string; name: string; subLabel?: string | null }>;
+  columns: Array<{ id: string; name: string }>;
+  cells: CliffMatrixCell[];
+  note: string | null;
+  truncated: boolean;
+  totalDistricts: number;
+  totalSectors: number;
+}
+
+interface ProjectEndingSoon {
+  id: string;
+  title: string;
+  districtName: string | null;
+  districtType: string | null;
+  sectorKey: string;
+  sectorName: string;
+  donorName: string | null;
+  organizationName: string;
+  endDate: string | null;
+  budgetUsd: number | null;
+  targetBeneficiaries: number | null;
+  daysUntilEnd: number | null;
+}
+
+interface TopAlert {
+  districtId: string;
+  districtName: string;
+  districtType: string | null;
+  sectorKey: string;
+  sectorName: string;
+  activeBudget: number;
+  expiringBudget: number;
+  plannedReplacementBudget: number;
+  netExposure: number;
+  cliffRiskPercent: number | null;
+  riskLevel: RiskLevel;
+}
+
+interface DonorExitExposureRow {
+  donorId: string | null;
+  donorName: string;
+  activeBudget: number;
+  expiringBudget: number;
+  expiringSharePercent: number | null;
+  activeProjectCount: number;
+  expiringProjectCount: number;
+}
+
+interface TimelineBucket {
+  key: string;
+  label: string;
+  startMonth: number;
+  endMonth: number;
+  expiringBudget: number;
+  plannedBudget: number;
+  expiringCount: number;
+  plannedCount: number;
+}
+
+interface CliffDataQuality {
+  totalProjects: number;
+  eligibleActiveCount: number;
+  eligiblePlannedCount: number;
+  expiringCount: number;
+  completedExcluded: number;
+  missingBudgetCount: number;
+  missingOrInvalidDatesCount: number;
+  activeMissingEndDateCount: number;
+  missingDistrictCount: number;
+  missingDonorCount: number;
+}
+
+interface FundingCliffs {
+  fundingCliffWindow: number;
+  calculatedAt: string;
+  windowEnd: string;
+  summary: CliffSummary;
+  byDistrict: CliffGroupRow[];
+  bySector: CliffGroupRow[];
+  districtSectorMatrix: CliffMatrix;
+  projectsEndingSoon: ProjectEndingSoon[];
+  topAlerts: TopAlert[];
+  donorExitExposure: DonorExitExposureRow[];
+  timeline: TimelineBucket[];
+  dataQuality: CliffDataQuality;
+  notes: string[];
+  appliedFilters: Record<string, string | number | null>;
+  role: "SYSTEM_OWNER" | "PARTNER_ADMIN";
+}
+
 interface Country {
   code: string;
   name: string;
@@ -241,6 +373,50 @@ const BUDGET_TIERS = [
   { id: "MEDIUM", label: "Medium ($500k–$2M)" },
   { id: "LARGE", label: "Large (≥ $2M)" },
 ];
+
+// Supported funding-cliff windows (months). Server also validates this.
+const FUNDING_CLIFF_WINDOWS = [
+  { id: "6", label: "6 months" },
+  { id: "12", label: "12 months" },
+  { id: "18", label: "18 months" },
+  { id: "24", label: "24 months" },
+];
+const DEFAULT_FUNDING_CLIFF_WINDOW = "12";
+
+// Risk-level palette. We also render a text label alongside, so this is
+// purely supplementary — never rely on colour alone to convey risk.
+const RISK_TONE: Record<RiskLevel, { bg: string; border: string; text: string; dot: string }> = {
+  Low: {
+    bg: "bg-emerald-50",
+    border: "border-emerald-200",
+    text: "text-emerald-800",
+    dot: "bg-emerald-500",
+  },
+  Moderate: {
+    bg: "bg-amber-50",
+    border: "border-amber-200",
+    text: "text-amber-800",
+    dot: "bg-amber-500",
+  },
+  High: {
+    bg: "bg-orange-50",
+    border: "border-orange-200",
+    text: "text-orange-800",
+    dot: "bg-orange-500",
+  },
+  Severe: {
+    bg: "bg-rose-50",
+    border: "border-rose-200",
+    text: "text-rose-800",
+    dot: "bg-rose-500",
+  },
+  "Insufficient data": {
+    bg: "bg-slate-50",
+    border: "border-slate-200",
+    text: "text-slate-600",
+    dot: "bg-slate-400",
+  },
+};
 
 // Years for the Active During Year filter.
 const YEAR_OPTIONS = (() => {
@@ -419,6 +595,9 @@ function PlaceholderCard({
 export default function ReportsPage() {
   const { user, isSystemOwner } = useAuth();
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
+  const [cliffs, setCliffs] = useState<FundingCliffs | null>(null);
+  const [cliffsLoading, setCliffsLoading] = useState(true);
+  const [cliffsError, setCliffsError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -441,6 +620,12 @@ export default function ReportsPage() {
   const [donorId, setDonorId] = useState<string>("_all");
   const [activeDuringYear, setActiveDuringYear] = useState<string>("_all");
   const [budgetTier, setBudgetTier] = useState<string>("_all");
+  // Funding-cliff-window affects the Risk & Vulnerability section only.
+  // It is stored alongside the other filters so Clear resets it to the
+  // default and so Partner Admins see a stable, predictable default.
+  const [fundingCliffWindow, setFundingCliffWindow] = useState<string>(
+    DEFAULT_FUNDING_CLIFF_WINDOW,
+  );
 
   // Reset district when country changes.
   useEffect(() => {
@@ -475,6 +660,16 @@ export default function ReportsPage() {
     budgetTier,
   ]);
 
+  // Funding-cliff analytics uses the same global filter set *plus* the
+  // funding-cliff-window. Kept separate so the window only influences the
+  // Risk & Vulnerability widgets, never the main analytics section.
+  const buildCliffQuery = useCallback((): string => {
+    const base = buildQuery();
+    const q = new URLSearchParams(base);
+    q.set("fundingCliffWindow", fundingCliffWindow);
+    return q.toString();
+  }, [buildQuery, fundingCliffWindow]);
+
   const fetchAnalytics = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -492,6 +687,24 @@ export default function ReportsPage() {
       setLoading(false);
     }
   }, [buildQuery]);
+
+  const fetchCliffs = useCallback(async () => {
+    setCliffsLoading(true);
+    setCliffsError(null);
+    try {
+      const qs = buildCliffQuery();
+      const res = await fetch(`/api/reports/funding-cliffs?${qs}`);
+      if (!res.ok) throw new Error("Failed to load funding cliff analytics");
+      const data = await res.json();
+      setCliffs(data);
+    } catch {
+      setCliffsError(
+        "Unable to load funding cliff analytics. Please try again.",
+      );
+    } finally {
+      setCliffsLoading(false);
+    }
+  }, [buildCliffQuery]);
 
   // Load reference data once.
   useEffect(() => {
@@ -526,6 +739,10 @@ export default function ReportsPage() {
     fetchAnalytics();
   }, [fetchAnalytics]);
 
+  useEffect(() => {
+    fetchCliffs();
+  }, [fetchCliffs]);
+
   const hasFilters =
     countryCode !== "_all" ||
     sectorKey !== "_all" ||
@@ -534,7 +751,8 @@ export default function ReportsPage() {
     administrativeAreaId !== "_all" ||
     donorId !== "_all" ||
     activeDuringYear !== "_all" ||
-    budgetTier !== "_all";
+    budgetTier !== "_all" ||
+    fundingCliffWindow !== DEFAULT_FUNDING_CLIFF_WINDOW;
 
   const clearFilters = () => {
     setCountryCode("_all");
@@ -545,6 +763,7 @@ export default function ReportsPage() {
     setDonorId("_all");
     setActiveDuringYear("_all");
     setBudgetTier("_all");
+    setFundingCliffWindow(DEFAULT_FUNDING_CLIFF_WINDOW);
   };
 
   return (
@@ -747,39 +966,32 @@ export default function ReportsPage() {
             </div>
 
             {/*
-              Funding Cliff Window — visible but disabled placeholder.
-              Preserved in the DOM so the next reporting phase can enable it
-              without re-arranging the filter grid.
+              Funding Cliff Window — scopes the Risk & Vulnerability section
+              only. Default is 12 months; supported values 6 / 12 / 18 / 24.
+              The server validates the value and falls back to 12 on
+              anything unexpected.
             */}
             <div className="grid gap-1.5">
-              <div className="flex items-center justify-between">
-                <Label
-                  htmlFor="reports-filter-funding-cliff-window"
-                  className="text-slate-500"
-                >
-                  Funding Cliff Window
-                </Label>
-                <Badge
-                  variant="outline"
-                  className="bg-slate-50 text-slate-500 border-slate-200 text-[10px] font-medium"
-                >
-                  <Lock className="w-3 h-3 mr-1" aria-hidden="true" />
-                  Coming soon
-                </Badge>
-              </div>
-              <Select value="_disabled" disabled>
+              <Label htmlFor="reports-filter-funding-cliff-window">
+                Funding Cliff Window
+              </Label>
+              <Select
+                value={fundingCliffWindow}
+                onValueChange={setFundingCliffWindow}
+              >
                 <SelectTrigger
                   id="reports-filter-funding-cliff-window"
                   data-design-id="reports-filter-funding-cliff-window"
-                  title="Coming in next reporting phase"
-                  aria-disabled="true"
+                  title="Applies to the Risk & Vulnerability section."
                 >
-                  <SelectValue placeholder="Coming in next reporting phase" />
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="_disabled" disabled>
-                    Coming in next reporting phase
-                  </SelectItem>
+                  {FUNDING_CLIFF_WINDOWS.map((w) => (
+                    <SelectItem key={w.id} value={w.id}>
+                      {w.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -1570,12 +1782,12 @@ export default function ReportsPage() {
           </section>
 
           {/* -------------------------------------------------------------- */}
-          {/* 6. Risk & Vulnerability (placeholders only)                    */}
+          {/* 6. Risk & Vulnerability (Funding Cliffs)                       */}
           {/* -------------------------------------------------------------- */}
           <section
             data-design-id="reports-risk-vulnerability"
             aria-labelledby="reports-risk-heading"
-            className="space-y-3"
+            className="space-y-4"
           >
             <div className="space-y-1">
               <h2
@@ -1585,31 +1797,30 @@ export default function ReportsPage() {
                 Risk &amp; Vulnerability
               </h2>
               <p className="text-sm text-slate-600 max-w-3xl">
-                Temporal and spatial vulnerability signals. These widgets are
-                planned for the next reporting phase and are shown as
-                placeholders so the dashboard structure remains stable.
+                Funding cliff risk indicates where recorded active funding is
+                scheduled to end without equivalent recorded planned
+                replacement funding. It does not prove that services will stop
+                or that donors have withdrawn. Adjust the Funding Cliff Window
+                filter above to change the horizon.
               </p>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-              <PlaceholderCard
-                icon={<ShieldAlert className="w-5 h-5" />}
-                title="Funding Cliff Risk"
-                description="Projected drop in active funding over the selected horizon."
-                dataDesignId="placeholder-funding-cliff-risk"
+            {cliffsLoading && (
+              <LoadingState message="Loading funding cliff analytics..." />
+            )}
+            {cliffsError && (
+              <ErrorState message={cliffsError} onRetry={fetchCliffs} />
+            )}
+
+            {!cliffsLoading && !cliffsError && cliffs && (
+              <FundingCliffSection
+                cliffs={cliffs}
+                fundingCliffWindow={fundingCliffWindow}
               />
-              <PlaceholderCard
-                icon={<CalendarClock className="w-5 h-5" />}
-                title="Projects Ending Soon"
-                description="Active projects with an end date within the selected cliff window."
-                dataDesignId="placeholder-projects-ending-soon"
-              />
-              <PlaceholderCard
-                icon={<TrendingDown className="w-5 h-5" />}
-                title="Districts Losing More Than 50% Funding"
-                description="Districts / Counties where projected funding falls by more than half."
-                dataDesignId="placeholder-districts-losing-funding"
-              />
+            )}
+
+            {/* Widgets retained as placeholders for the next reporting phase. */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-2">
               <PlaceholderCard
                 icon={<MapPin className="w-5 h-5" />}
                 title="No Active or Planned Intervention Districts"
@@ -1621,12 +1832,6 @@ export default function ReportsPage() {
                 title="Low Investment Density Districts"
                 description="Districts / Counties with disproportionately low recorded investment per capita."
                 dataDesignId="placeholder-low-investment-density"
-              />
-              <PlaceholderCard
-                icon={<Clock className="w-5 h-5" />}
-                title="Upcoming Funding Gaps Timeline"
-                description="Calendar view of projected project closures across the selected window."
-                dataDesignId="placeholder-funding-gap-timeline"
               />
             </div>
           </section>
@@ -2025,6 +2230,821 @@ function CompletenessBar({ percent }: { percent: number }) {
       <span className="w-14 text-right font-medium tabular-nums">
         {formatPercent(clamped, 0)}
       </span>
+    </div>
+  );
+}
+
+// ============================================================================
+// Funding Cliff / Risk & Vulnerability widgets
+// ============================================================================
+
+/**
+ * Badge that communicates risk level using BOTH colour and text.
+ * Never rely on colour alone — the text label is always rendered.
+ */
+function RiskBadge({
+  level,
+  size = "sm",
+}: {
+  level: RiskLevel;
+  size?: "xs" | "sm";
+}) {
+  const tone = RISK_TONE[level];
+  const padding = size === "xs" ? "px-1.5 py-0.5 text-[10px]" : "px-2 py-0.5 text-xs";
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full border font-medium ${padding} ${tone.bg} ${tone.text} ${tone.border}`}
+      aria-label={`Risk level: ${level}`}
+    >
+      <span
+        aria-hidden="true"
+        className={`inline-block w-1.5 h-1.5 rounded-full ${tone.dot}`}
+      />
+      {level}
+    </span>
+  );
+}
+
+/**
+ * Summary card for the Funding Cliff summary row. Compact, consistent,
+ * and dollar-formatted.
+ */
+function CliffSummaryCard({
+  label,
+  value,
+  sublabel,
+  icon,
+  accent,
+}: {
+  label: string;
+  value: string;
+  sublabel?: string;
+  icon: React.ReactNode;
+  accent?: "neutral" | "warn" | "danger" | "ok";
+}) {
+  const accentClass =
+    accent === "warn"
+      ? "text-amber-700"
+      : accent === "danger"
+        ? "text-rose-700"
+        : accent === "ok"
+          ? "text-emerald-700"
+          : "text-slate-900";
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <CardTitle className="text-sm font-medium text-slate-600">
+          {label}
+        </CardTitle>
+        <div className="text-slate-500">{icon}</div>
+      </CardHeader>
+      <CardContent>
+        <div className={`text-2xl font-bold tabular-nums ${accentClass}`}>
+          {value}
+        </div>
+        {sublabel && (
+          <div className="text-xs text-slate-500 mt-1">{sublabel}</div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Tooltip body for cliff-grouping bar charts (By District / By Sector).
+ */
+function CliffGroupTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean;
+  payload?: Array<{ payload: CliffGroupRow }>;
+}) {
+  if (!active || !payload || payload.length === 0) return null;
+  const r = payload[0].payload;
+  return (
+    <div className="rounded-md border border-slate-200 bg-white shadow-lg p-3 text-xs max-w-xs">
+      <div className="font-semibold text-slate-900 mb-1 truncate">{r.name}</div>
+      <div className="space-y-0.5 text-slate-600">
+        <div>
+          <span className="text-slate-500">Cliff risk:</span>{" "}
+          <span className="font-medium">
+            {r.cliffRiskPercent != null
+              ? formatPercent(r.cliffRiskPercent, 1)
+              : "Insufficient data"}
+          </span>
+        </div>
+        <div>
+          <span className="text-slate-500">Active budget:</span>{" "}
+          {formatCurrencyFull(r.activeBudget)}
+        </div>
+        <div>
+          <span className="text-slate-500">Expiring within window:</span>{" "}
+          {formatCurrencyFull(r.expiringBudget)}
+        </div>
+        <div>
+          <span className="text-slate-500">Planned replacement:</span>{" "}
+          {formatCurrencyFull(r.plannedReplacementBudget)}
+        </div>
+        <div>
+          <span className="text-slate-500">Net exposure:</span>{" "}
+          {formatCurrencyFull(r.netExposure)}
+        </div>
+        <div className="pt-1">
+          <RiskBadge level={r.riskLevel} size="xs" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Horizontal bar chart showing cliff risk % across a grouping dimension.
+ * Each row is shaded by risk tier (plus a text badge alongside).
+ */
+function CliffGroupBarChart({
+  rows,
+  groupingLabel,
+  limit = 12,
+}: {
+  rows: CliffGroupRow[];
+  groupingLabel: string;
+  limit?: number;
+}) {
+  const top = rows.slice(0, limit);
+  if (top.length === 0) {
+    return (
+      <EmptyChart message={`${groupingLabel} data is required to calculate geographic funding cliff risk.`} />
+    );
+  }
+  return (
+    <ResponsiveContainer width="100%" height={Math.max(240, top.length * 34)}>
+      <BarChart
+        data={top.map((r) => ({ ...r, riskPct: r.cliffRiskPercent ?? 0 }))}
+        layout="vertical"
+        margin={{ top: 5, right: 30, bottom: 5, left: 10 }}
+      >
+        <CartesianGrid strokeDasharray="3 3" />
+        <XAxis
+          type="number"
+          domain={[0, 100]}
+          tickFormatter={(v) => `${v}%`}
+          tick={{ fontSize: 11 }}
+        />
+        <YAxis
+          type="category"
+          dataKey="name"
+          width={160}
+          tick={{ fontSize: 11 }}
+        />
+        <Tooltip content={<CliffGroupTooltip />} />
+        <Bar dataKey="riskPct" radius={[0, 4, 4, 0]}>
+          {top.map((r) => {
+            const colour =
+              r.riskLevel === "Severe"
+                ? "#e11d48"
+                : r.riskLevel === "High"
+                  ? "#ea580c"
+                  : r.riskLevel === "Moderate"
+                    ? "#d97706"
+                    : r.riskLevel === "Low"
+                      ? "#059669"
+                      : "#94a3b8";
+            return <Cell key={`cliff-cell-${r.key}`} fill={colour} />;
+          })}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+/**
+ * Matrix table for top-10 × top-10 district × sector cells. Each cell shows
+ * cliff risk % and a risk badge so the classification is readable without
+ * colour alone.
+ */
+function CliffMatrixTable({ matrix }: { matrix: CliffMatrix }) {
+  const lookup = new Map<string, CliffMatrixCell>();
+  for (const c of matrix.cells) {
+    lookup.set(`${c.districtId}::${c.sectorKey}`, c);
+  }
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead className="sticky left-0 bg-white z-10">
+            District / County
+          </TableHead>
+          {matrix.columns.map((c) => (
+            <TableHead
+              key={c.id}
+              className="text-right whitespace-nowrap"
+              title={c.name}
+            >
+              {c.name}
+            </TableHead>
+          ))}
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {matrix.rows.map((r) => (
+          <TableRow key={r.id}>
+            <TableCell className="sticky left-0 bg-white z-10 font-medium max-w-[220px] truncate">
+              {r.name}
+              {r.subLabel && (
+                <span className="ml-1 text-[10px] text-slate-400">
+                  · {r.subLabel}
+                </span>
+              )}
+            </TableCell>
+            {matrix.columns.map((c) => {
+              const cell = lookup.get(`${r.id}::${c.id}`);
+              if (!cell || cell.activeBudget === 0) {
+                return (
+                  <TableCell
+                    key={`${r.id}-${c.id}`}
+                    className="text-right tabular-nums"
+                  >
+                    <span className="text-slate-300">—</span>
+                  </TableCell>
+                );
+              }
+              return (
+                <TableCell
+                  key={`${r.id}-${c.id}`}
+                  className="text-right tabular-nums"
+                  title={`Active ${formatCurrencyFull(cell.activeBudget)} · Expiring ${formatCurrencyFull(cell.expiringBudget)} · Planned ${formatCurrencyFull(cell.plannedReplacementBudget)}`}
+                >
+                  <div className="inline-flex flex-col items-end gap-0.5">
+                    <span className="font-medium">
+                      {cell.cliffRiskPercent != null
+                        ? formatPercent(cell.cliffRiskPercent, 0)
+                        : "—"}
+                    </span>
+                    <RiskBadge level={cell.riskLevel} size="xs" />
+                  </div>
+                </TableCell>
+              );
+            })}
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+}
+
+/**
+ * Main Risk & Vulnerability body, rendered once funding-cliffs data loads.
+ */
+function FundingCliffSection({
+  cliffs,
+  fundingCliffWindow,
+}: {
+  cliffs: FundingCliffs;
+  fundingCliffWindow: string;
+}) {
+  const windowLabel = `${fundingCliffWindow} months`;
+  const s = cliffs.summary;
+
+  return (
+    <div className="space-y-6">
+      {/* 1. Funding Cliff Summary Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+        <CliffSummaryCard
+          label="Funding Cliff Window"
+          value={windowLabel}
+          sublabel={`Calculated ${new Date(cliffs.calculatedAt).toLocaleDateString()}`}
+          icon={<CalendarClock className="w-5 h-5" />}
+        />
+        <CliffSummaryCard
+          label="Total Active Budget"
+          value={formatCurrencyCompact(s.activeBudget)}
+          sublabel={`${formatNumber(s.activeProjectCount)} project${s.activeProjectCount === 1 ? "" : "s"}`}
+          icon={<DollarSign className="w-5 h-5 text-emerald-600" />}
+          accent="ok"
+        />
+        <CliffSummaryCard
+          label="Budget Expiring Within Window"
+          value={formatCurrencyCompact(s.expiringBudget)}
+          sublabel={`${formatNumber(s.expiringProjectCount)} active project${s.expiringProjectCount === 1 ? "" : "s"}`}
+          icon={<TrendingDown className="w-5 h-5 text-amber-600" />}
+          accent="warn"
+        />
+        <CliffSummaryCard
+          label="Planned Replacement Budget"
+          value={formatCurrencyCompact(s.plannedReplacementBudget)}
+          sublabel={`${formatNumber(s.plannedReplacementProjectCount)} planned project${s.plannedReplacementProjectCount === 1 ? "" : "s"}`}
+          icon={<TrendingUp className="w-5 h-5 text-sky-600" />}
+        />
+        <CliffSummaryCard
+          label="Net Funding Exposure"
+          value={formatCurrencyCompact(s.netExposure)}
+          sublabel="Expiring minus planned replacement"
+          icon={<ShieldAlert className="w-5 h-5 text-rose-600" />}
+          accent={s.netExposure > 0 ? "danger" : "neutral"}
+        />
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-slate-600">
+              Overall Cliff Risk
+            </CardTitle>
+            <div className="text-slate-500">
+              <ShieldAlert className="w-5 h-5" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold tabular-nums text-slate-900">
+              {s.cliffRiskPercent != null
+                ? formatPercent(s.cliffRiskPercent, 1)
+                : "Insufficient data"}
+            </div>
+            <div className="text-xs text-slate-500 mt-1">
+              <RiskBadge level={s.riskLevel} size="xs" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* 2. By District / County */}
+      <Card data-design-id="cliff-by-district">
+        <CardHeader>
+          <CardTitle>Funding Cliff Risk by District / County</CardTitle>
+          <CardDescription>
+            Districts / Counties ranked by projected cliff risk over the
+            selected {windowLabel} horizon. Risk is classified Low (≤25%),
+            Moderate (≤50%), High (≤75%), or Severe (&gt;75%).
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <CliffGroupBarChart
+            rows={cliffs.byDistrict}
+            groupingLabel="District / County"
+          />
+          {cliffs.byDistrict.length > 0 && (
+            <CliffGroupTable rows={cliffs.byDistrict} groupLabel="District / County" />
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 3. By Sector */}
+      <Card data-design-id="cliff-by-sector">
+        <CardHeader>
+          <CardTitle>Funding Cliff Risk by Sector</CardTitle>
+          <CardDescription>
+            Sectors ranked by projected cliff risk over the selected{" "}
+            {windowLabel} horizon.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <CliffGroupBarChart
+            rows={cliffs.bySector}
+            groupingLabel="Sector"
+          />
+          {cliffs.bySector.length > 0 && (
+            <CliffGroupTable rows={cliffs.bySector} groupLabel="Sector" />
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 4. District × Sector Matrix */}
+      <Card data-design-id="cliff-matrix">
+        <CardHeader>
+          <CardTitle>District-Sector Funding Cliff Matrix</CardTitle>
+          <CardDescription>
+            Cliff risk % by District / County (rows) and Sector (columns).
+            {cliffs.districtSectorMatrix.note
+              ? ` ${cliffs.districtSectorMatrix.note}`
+              : ""}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="overflow-x-auto">
+          {cliffs.districtSectorMatrix.rows.length > 0 &&
+          cliffs.districtSectorMatrix.columns.length > 0 ? (
+            <CliffMatrixTable matrix={cliffs.districtSectorMatrix} />
+          ) : (
+            <EmptyChart message="District / County data is required to calculate the district-sector funding cliff matrix." />
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 5. Projects Ending Soon */}
+      <Card data-design-id="cliff-projects-ending-soon">
+        <CardHeader>
+          <CardTitle>Projects Ending Soon</CardTitle>
+          <CardDescription>
+            Active projects with a recorded end date inside the selected{" "}
+            {windowLabel} horizon, sorted by soonest end date first. Up to 50
+            projects shown.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="overflow-x-auto">
+          {cliffs.projectsEndingSoon.length === 0 ? (
+            <EmptyChart message="No active projects are currently scheduled to end within the selected window." />
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Project Title</TableHead>
+                  <TableHead>District / County</TableHead>
+                  <TableHead>Sector</TableHead>
+                  <TableHead>Donor</TableHead>
+                  <TableHead>Implementing Organisation</TableHead>
+                  <TableHead>End Date</TableHead>
+                  <TableHead className="text-right">Days Until End</TableHead>
+                  <TableHead className="text-right">Budget (USD)</TableHead>
+                  <TableHead className="text-right">
+                    Target Beneficiaries
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {cliffs.projectsEndingSoon.map((p) => (
+                  <TableRow key={p.id}>
+                    <TableCell className="font-medium max-w-[240px] truncate">
+                      {p.title}
+                    </TableCell>
+                    <TableCell>{p.districtName ?? "—"}</TableCell>
+                    <TableCell>{p.sectorName}</TableCell>
+                    <TableCell>
+                      {p.donorName ?? "Unknown / Not Provided"}
+                    </TableCell>
+                    <TableCell className="max-w-[220px] truncate">
+                      {p.organizationName}
+                    </TableCell>
+                    <TableCell>
+                      {p.endDate
+                        ? new Date(p.endDate).toLocaleDateString()
+                        : "—"}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {p.daysUntilEnd != null
+                        ? formatNumber(p.daysUntilEnd)
+                        : "—"}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {p.budgetUsd != null
+                        ? formatCurrencyFull(p.budgetUsd)
+                        : "—"}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {p.targetBeneficiaries != null
+                        ? formatNumber(p.targetBeneficiaries)
+                        : "—"}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 6. Top Funding Cliff Alerts (>50%) */}
+      <Card data-design-id="cliff-top-alerts" className="border-rose-200">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <ShieldAlert className="w-5 h-5 text-rose-600" />
+            Top Funding Cliff Alerts
+          </CardTitle>
+          <CardDescription>
+            District-sector combinations where projected cliff risk exceeds
+            50% over the selected {windowLabel} horizon. Use this as a
+            review list, not a final funding forecast.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="overflow-x-auto">
+          {cliffs.topAlerts.length === 0 ? (
+            <EmptyChart message="No high funding cliff alerts under the current filters." />
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Geography / District</TableHead>
+                  <TableHead>Sector</TableHead>
+                  <TableHead className="text-right">Active Budget</TableHead>
+                  <TableHead className="text-right">Expiring Budget</TableHead>
+                  <TableHead className="text-right">
+                    Planned Replacement
+                  </TableHead>
+                  <TableHead className="text-right">Net Exposure</TableHead>
+                  <TableHead className="text-right">Cliff Risk %</TableHead>
+                  <TableHead>Risk Level</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {cliffs.topAlerts.map((a) => (
+                  <TableRow key={`${a.districtId}-${a.sectorKey}`}>
+                    <TableCell className="font-medium">
+                      {a.districtName}
+                      {a.districtType && (
+                        <span className="ml-1 text-[10px] text-slate-400">
+                          · {a.districtType}
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell>{a.sectorName}</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {formatCurrencyFull(a.activeBudget)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {formatCurrencyFull(a.expiringBudget)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {formatCurrencyFull(a.plannedReplacementBudget)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums font-medium">
+                      {formatCurrencyFull(a.netExposure)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums font-medium">
+                      {a.cliffRiskPercent != null
+                        ? formatPercent(a.cliffRiskPercent, 1)
+                        : "—"}
+                    </TableCell>
+                    <TableCell>
+                      <RiskBadge level={a.riskLevel} />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 7. Donor Exit Exposure */}
+      <Card data-design-id="cliff-donor-exit-exposure">
+        <CardHeader>
+          <CardTitle>Donor Exit Exposure</CardTitle>
+          <CardDescription>
+            Recorded projects funded by each donor ending within the selected{" "}
+            {windowLabel} horizon. This is not evidence that a donor has
+            withdrawn — it reflects scheduled project end dates only.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="overflow-x-auto">
+          {cliffs.donorExitExposure.length === 0 ? (
+            <EmptyChart message="No donor data is available for the current filters." />
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Donor</TableHead>
+                  <TableHead className="text-right">Active Budget</TableHead>
+                  <TableHead className="text-right">Expiring Budget</TableHead>
+                  <TableHead className="text-right">
+                    Expiring Share %
+                  </TableHead>
+                  <TableHead className="text-right">Active Projects</TableHead>
+                  <TableHead className="text-right">
+                    Ending Within Window
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {cliffs.donorExitExposure.map((d) => (
+                  <TableRow key={d.donorName}>
+                    <TableCell className="font-medium max-w-[220px] truncate">
+                      {d.donorName}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {formatCurrencyFull(d.activeBudget)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {formatCurrencyFull(d.expiringBudget)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {d.expiringSharePercent != null
+                        ? formatPercent(d.expiringSharePercent, 1)
+                        : "—"}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {formatNumber(d.activeProjectCount)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {formatNumber(d.expiringProjectCount)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 8. Funding Pipeline Timeline */}
+      <Card data-design-id="cliff-timeline">
+        <CardHeader>
+          <CardTitle>Funding Pipeline Timeline</CardTitle>
+          <CardDescription>
+            Active budget scheduled to end (amber) versus planned budget
+            scheduled to start (blue) in each six-month bucket across the next
+            24 months. Projects with missing budgets or invalid dates are
+            excluded. Use this to see whether the planned pipeline appears to
+            replace expiring funding.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {cliffs.timeline.every(
+            (b) => b.expiringBudget === 0 && b.plannedBudget === 0,
+          ) ? (
+            <EmptyChart message="No active project end dates or planned project start dates fall within the next 24 months." />
+          ) : (
+            <ResponsiveContainer width="100%" height={320}>
+              <BarChart
+                data={cliffs.timeline}
+                margin={{ top: 10, right: 20, bottom: 10, left: 0 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="label" tick={{ fontSize: 12 }} />
+                <YAxis
+                  tickFormatter={(v) => formatCurrencyCompact(v)}
+                  tick={{ fontSize: 12 }}
+                />
+                <Tooltip
+                  formatter={(v: unknown, name: unknown) => [
+                    formatCurrencyFull(
+                      typeof v === "number" ? v : Number(v),
+                    ),
+                    String(name),
+                  ]}
+                />
+                <Legend />
+                <Bar
+                  dataKey="expiringBudget"
+                  name="Expiring (active projects)"
+                  fill="#f59e0b"
+                  radius={[4, 4, 0, 0]}
+                />
+                <Bar
+                  dataKey="plannedBudget"
+                  name="Planned (starting)"
+                  fill="#0ea5e9"
+                  radius={[4, 4, 0, 0]}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 9. Funding Cliff Data Quality + standing note */}
+      <Card data-design-id="cliff-data-quality">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Info className="w-5 h-5 text-slate-500" />
+            Funding Cliff Data Quality
+          </CardTitle>
+          <CardDescription>
+            Records excluded from the calculations above, for transparency.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+            <CliffDqCell
+              label="Projects evaluated"
+              value={formatNumber(cliffs.dataQuality.totalProjects)}
+            />
+            <CliffDqCell
+              label="Completed (excluded)"
+              value={formatNumber(cliffs.dataQuality.completedExcluded)}
+            />
+            <CliffDqCell
+              label="Eligible active projects"
+              value={formatNumber(cliffs.dataQuality.eligibleActiveCount)}
+            />
+            <CliffDqCell
+              label="Missing budget"
+              value={formatNumber(cliffs.dataQuality.missingBudgetCount)}
+              warn={cliffs.dataQuality.missingBudgetCount > 0}
+            />
+            <CliffDqCell
+              label="Missing or invalid dates"
+              value={formatNumber(cliffs.dataQuality.missingOrInvalidDatesCount)}
+              warn={cliffs.dataQuality.missingOrInvalidDatesCount > 0}
+            />
+            <CliffDqCell
+              label="Active projects missing end date"
+              value={formatNumber(cliffs.dataQuality.activeMissingEndDateCount)}
+              warn={cliffs.dataQuality.activeMissingEndDateCount > 0}
+            />
+            <CliffDqCell
+              label="Missing District / County"
+              value={formatNumber(cliffs.dataQuality.missingDistrictCount)}
+              warn={cliffs.dataQuality.missingDistrictCount > 0}
+            />
+            <CliffDqCell
+              label="Missing donor"
+              value={formatNumber(cliffs.dataQuality.missingDonorCount)}
+              warn={cliffs.dataQuality.missingDonorCount > 0}
+            />
+            <CliffDqCell
+              label="Planned replacement projects"
+              value={formatNumber(cliffs.dataQuality.eligiblePlannedCount)}
+            />
+          </div>
+          <div className="space-y-2 pt-2">
+            {cliffs.notes.map((n) => (
+              <div
+                key={n}
+                className="flex items-start gap-2 text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-md px-3 py-2"
+              >
+                <Info className="w-4 h-4 mt-0.5 text-slate-500 shrink-0" />
+                <span>{n}</span>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function CliffDqCell({
+  label,
+  value,
+  warn,
+}: {
+  label: string;
+  value: string;
+  warn?: boolean;
+}) {
+  return (
+    <div
+      className={`rounded-md border px-3 py-2 ${
+        warn
+          ? "bg-amber-50 border-amber-200 text-amber-900"
+          : "bg-slate-50 border-slate-200 text-slate-700"
+      }`}
+    >
+      <div className="text-[11px] uppercase tracking-wide opacity-70">
+        {label}
+      </div>
+      <div className="text-lg font-semibold tabular-nums">{value}</div>
+    </div>
+  );
+}
+
+/**
+ * Compact, filter-responsive table beneath each cliff bar chart so exact
+ * figures are always visible. Kept separate from the chart so both can be
+ * hidden independently under loading / empty states.
+ */
+function CliffGroupTable({
+  rows,
+  groupLabel,
+}: {
+  rows: CliffGroupRow[];
+  groupLabel: string;
+}) {
+  return (
+    <div className="overflow-x-auto mt-4">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>{groupLabel}</TableHead>
+            <TableHead className="text-right">Active Budget</TableHead>
+            <TableHead className="text-right">Expiring Budget</TableHead>
+            <TableHead className="text-right">Planned Replacement</TableHead>
+            <TableHead className="text-right">Net Exposure</TableHead>
+            <TableHead className="text-right">Cliff Risk %</TableHead>
+            <TableHead>Risk Level</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((r) => (
+            <TableRow key={r.key}>
+              <TableCell className="font-medium max-w-[240px] truncate">
+                {r.name}
+                {r.subLabel && (
+                  <span className="ml-1 text-[10px] text-slate-400">
+                    · {r.subLabel}
+                  </span>
+                )}
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
+                {formatCurrencyFull(r.activeBudget)}
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
+                {formatCurrencyFull(r.expiringBudget)}
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
+                {formatCurrencyFull(r.plannedReplacementBudget)}
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
+                {formatCurrencyFull(r.netExposure)}
+              </TableCell>
+              <TableCell className="text-right tabular-nums font-medium">
+                {r.cliffRiskPercent != null
+                  ? formatPercent(r.cliffRiskPercent, 1)
+                  : "—"}
+              </TableCell>
+              <TableCell>
+                <RiskBadge level={r.riskLevel} />
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
     </div>
   );
 }
