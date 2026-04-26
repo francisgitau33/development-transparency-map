@@ -13,6 +13,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useAuth } from "@/lib/auth-context";
 import { Globe, AlertCircle, Loader2 } from "lucide-react";
 import { BRANDING } from "@/lib/branding";
+import { HCaptchaWidget } from "@/components/auth/HCaptchaWidget";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -28,6 +29,10 @@ export default function LoginPage() {
   const [registerPassword, setRegisterPassword] = useState("");
   const [registerName, setRegisterName] = useState("");
   const [registerOrg, setRegisterOrg] = useState("");
+  // CAPTCHA state. `captchaEnabled` is null until the widget reports back
+  // so we don't briefly show the "Complete CAPTCHA" note in dev.
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaEnabled, setCaptchaEnabled] = useState<boolean | null>(null);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,11 +54,27 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
 
-    const result = await register(registerEmail, registerPassword, registerName, registerOrg);
+    // If CAPTCHA is configured client-side, block submission until the user
+    // has completed it. The server is still the authoritative check.
+    if (captchaEnabled && !captchaToken) {
+      setError("Please complete the CAPTCHA challenge to continue.");
+      setLoading(false);
+      return;
+    }
+
+    const result = await register(
+      registerEmail,
+      registerPassword,
+      registerName,
+      registerOrg,
+      captchaToken ?? undefined,
+    );
 
     if (result.success && result.redirectTo) {
       router.push(result.redirectTo);
     } else {
+      // Clear CAPTCHA token so the user must solve a fresh challenge on retry.
+      setCaptchaToken(null);
       setError(result.error || "Registration failed");
       setLoading(false);
     }
@@ -217,6 +238,19 @@ export default function LoginPage() {
                         value={registerOrg}
                         onChange={(e) => setRegisterOrg(e.target.value)}
                         disabled={loading}
+                      />
+                    </div>
+                    <div
+                      data-design-id="register-captcha-field"
+                      className="space-y-2"
+                    >
+                      <HCaptchaWidget
+                        onVerify={(token) => setCaptchaToken(token)}
+                        onExpire={() => setCaptchaToken(null)}
+                        onError={() => setCaptchaToken(null)}
+                        onAvailability={(enabled) =>
+                          setCaptchaEnabled(enabled)
+                        }
                       />
                     </div>
                   </CardContent>

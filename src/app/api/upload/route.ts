@@ -4,6 +4,54 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { validateProject } from "@/lib/validation";
 import { AUDIT_ACTIONS, logAudit } from "@/lib/audit";
+import {
+  checkRateLimit,
+  getClientIp,
+  RATE_LIMITS,
+  rateLimitedResponse,
+} from "@/lib/rate-limit";
+
+/**
+ * Canonical CSV header set accepted by the upload route.
+ *
+ * Split into REQUIRED vs OPTIONAL so the server can reject uploads that
+ * are missing critical columns BEFORE row-level validation is run. This
+ * matches the template string shipped from the /dashboard/upload page.
+ *
+ * When adding a new column:
+ *   - Update the template in src/app/dashboard/upload/page.tsx.
+ *   - Update this set.
+ *   - Update src/lib/validation.ts if the column is validated.
+ */
+const REQUIRED_CSV_HEADERS = [
+  "title",
+  "countryCode",
+  "sectorKey",
+  "status",
+  "startDate",
+  "latitude",
+  "longitude",
+] as const;
+
+const OPTIONAL_CSV_HEADERS = [
+  "description",
+  "endDate",
+  "budgetUsd",
+  "targetBeneficiaries",
+  "adminArea1",
+  "adminArea2",
+  "districtCounty",
+  "donor",
+  "locationName",
+  "dataSource",
+  "contactEmail",
+] as const;
+
+/**
+ * Server-side row-count cap. Uploads above this threshold are rejected
+ * with 413 before ANY row-level work runs — protects DB + memory.
+ */
+const MAX_UPLOAD_ROWS = 10_000;
 
 interface CSVRow {
   title?: string;
@@ -40,6 +88,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Per-user upload rate limit. Falls back to IP if no user context —
+    // which should not happen post-auth but we defend in depth.
+    const uploadRl = checkRateLimit({
+      bucket: "upload",
+      key: session.userId || getClientIp(request),
+      limit: RATE_LIMITS.upload.limit,
+      windowMs: RATE_LIMITS.upload.windowMs,
+    });
+    if (!uploadRl.success) return rateLimitedResponse(uploadRl);
+
     const user = await prisma.user.findUnique({
       where: { id: session.userId },
       include: { role: true },
@@ -58,7 +116,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { rows, organizationId: reqOrgId } = await request.json();
+    // The client is expected to send the PapaParse result:
+    //   { rows: Record<string,string>[], organizationId?, headers?: string[] }
+    // `headers` is the array reported by PapaParse (results.meta.fields).
+    // We treat it as the source of truth for "what columns were present"
+    // because row-level access always returns a value for each declared
+    // field (even if empty), which would make the check below useless.
+    const body = (await request.json()) as {
+      rows?: unknown;
+      organizationId?: string;
+      headers?: unknown;
+    };
+    const { rows, organizationId: reqOrgId } = body;
+    const headers = Array.isArray(body.headers)
+      ? (body.headers as string[])
+      : undefined;
 
     if (user.role.role === "SYSTEM_OWNER" && reqOrgId) {
       organizationId = reqOrgId;
@@ -75,6 +147,54 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "No data rows provided" },
         { status: 400 }
+      );
+    }
+
+    // ---------------------------------------------------------------------
+    // Server-side row-count cap. Reject oversized uploads BEFORE anything
+    // else touches the DB. Returns 413 (Payload Too Large).
+    // ---------------------------------------------------------------------
+    if (rows.length > MAX_UPLOAD_ROWS) {
+      return NextResponse.json(
+        {
+          error:
+            "CSV file is too large. Please reduce the number of rows and try again.",
+          maxRows: MAX_UPLOAD_ROWS,
+          submittedRows: rows.length,
+        },
+        { status: 413 },
+      );
+    }
+
+    // ---------------------------------------------------------------------
+    // Required-header validation. We prefer the explicit `headers` array
+    // reported by PapaParse. If the client did not send one (older clients,
+    // hand-crafted requests), we fall back to the keys of the first row.
+    // Either way, we short-circuit with 400 + `missingHeaders[]` BEFORE any
+    // row-level work runs, so missing columns are NOT reported as thousands
+    // of repeated row-level errors.
+    // ---------------------------------------------------------------------
+    const detectedHeaders = new Set<string>(
+      (headers?.filter((h) => typeof h === "string" && h.trim().length > 0) ??
+        (rows.length > 0 && typeof rows[0] === "object" && rows[0] !== null
+          ? Object.keys(rows[0] as Record<string, unknown>)
+          : [])
+      ).map((h) => h.trim()),
+    );
+
+    const missingHeaders = REQUIRED_CSV_HEADERS.filter(
+      (h) => !detectedHeaders.has(h),
+    );
+
+    if (missingHeaders.length > 0) {
+      return NextResponse.json(
+        {
+          error: "CSV upload is missing required columns.",
+          missingHeaders,
+          requiredHeaders: REQUIRED_CSV_HEADERS,
+          optionalHeaders: OPTIONAL_CSV_HEADERS,
+        },
+        { status: 400 },
       );
     }
 

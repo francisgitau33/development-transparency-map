@@ -49,6 +49,12 @@ export const DASHBOARD_NAV: readonly DashboardNavItem[] = [
     systemOwnerOnly: true,
   },
   { label: "Users", href: "/dashboard/users", icon: "Users", systemOwnerOnly: true },
+  {
+    label: "Audit Log",
+    href: "/dashboard/audit",
+    icon: "Shield",
+    systemOwnerOnly: true,
+  },
 ];
 
 export const ROLE_TYPES = {

@@ -7,6 +7,12 @@ import {
   EmailNotConfiguredError,
   sendEmail,
 } from "@/lib/email";
+import {
+  checkRateLimit,
+  getClientIp,
+  RATE_LIMITS,
+  rateLimitedResponse,
+} from "@/lib/rate-limit";
 
 /**
  * Forgot Password API
@@ -37,6 +43,16 @@ function resolveBaseUrl(request: NextRequest): string {
 
 export async function POST(request: NextRequest) {
   try {
+    // Aggressive rate limit on forgot-password to slow down enumeration /
+    // email-bomb attacks. Neutral 429 wording keeps enumeration hard.
+    const rl = checkRateLimit({
+      bucket: "forgot-password",
+      key: getClientIp(request),
+      limit: RATE_LIMITS.forgotPassword.limit,
+      windowMs: RATE_LIMITS.forgotPassword.windowMs,
+    });
+    if (!rl.success) return rateLimitedResponse(rl);
+
     const { email } = await request.json();
 
     if (!email || typeof email !== "string") {

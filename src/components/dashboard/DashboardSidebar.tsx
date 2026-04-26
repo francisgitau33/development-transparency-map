@@ -15,6 +15,7 @@ import {
   Globe,
   Map as MapIcon,
   HandCoins,
+  Shield,
 } from "lucide-react";
 import { BRANDING, DASHBOARD_NAV } from "@/lib/branding";
 import { useAuth } from "@/lib/auth-context";
@@ -31,6 +32,7 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   Map: MapIcon,
   HandCoins,
   Globe,
+  Shield,
 };
 
 export function DashboardSidebar() {

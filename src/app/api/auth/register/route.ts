@@ -8,10 +8,61 @@ import {
 } from "@/lib/auth";
 import { createSessionToken, setSessionCookie } from "@/lib/session";
 import { BRANDING } from "@/lib/branding";
+import {
+  checkRateLimit,
+  getClientIp,
+  RATE_LIMITS,
+  rateLimitedResponse,
+} from "@/lib/rate-limit";
+import { isCaptchaConfigured, verifyCaptchaToken } from "@/lib/captcha";
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, password, displayName, organizationName } = await request.json();
+    // Rate-limit: 10/min/IP. Keeps botnets from mass-creating accounts
+    // even if CAPTCHA enforcement is temporarily misconfigured.
+    const ip = getClientIp(request);
+    const rl = checkRateLimit({
+      bucket: "register",
+      key: ip,
+      limit: RATE_LIMITS.register.limit,
+      windowMs: RATE_LIMITS.register.windowMs,
+    });
+    if (!rl.success) return rateLimitedResponse(rl);
+
+    const {
+      email,
+      password,
+      displayName,
+      organizationName,
+      captchaToken,
+    } = await request.json();
+
+    // CAPTCHA (hCaptcha) — verified server-side when configured.
+    // In development with no HCAPTCHA_SECRET, verifyCaptchaToken returns ok=true
+    // and logs a one-time warning (see src/lib/captcha.ts).
+    // In production without HCAPTCHA_SECRET, verification fails closed so we
+    // never accept unprotected registrations.
+    if (isCaptchaConfigured() || process.env.NODE_ENV === "production") {
+      const verify = await verifyCaptchaToken(captchaToken, ip);
+      if (!verify.ok) {
+        if (verify.reason === "not-configured-production") {
+          console.error(
+            "[register] HCAPTCHA_SECRET missing in production — registration refused.",
+          );
+          return NextResponse.json(
+            {
+              error:
+                "Registration is temporarily unavailable. Please contact support.",
+            },
+            { status: 500 },
+          );
+        }
+        return NextResponse.json(
+          { error: "CAPTCHA verification failed. Please try again." },
+          { status: 400 },
+        );
+      }
+    }
 
     if (!email || !password) {
       return NextResponse.json(

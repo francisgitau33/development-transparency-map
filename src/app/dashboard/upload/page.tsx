@@ -64,6 +64,10 @@ export default function UploadPage() {
 
   const [selectedOrg, setSelectedOrg] = useState<string>("");
   const [csvData, setCsvData] = useState<Record<string, unknown>[] | null>(null);
+  // The exact header array PapaParse reported (results.meta.fields). Sent to
+  // the server so it can reject uploads with missing required columns before
+  // any row-level validation is run.
+  const [csvHeaders, setCsvHeaders] = useState<string[] | null>(null);
   const [fileName, setFileName] = useState<string>("");
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState<UploadResult | null>(null);
@@ -113,11 +117,17 @@ export default function UploadPage() {
       skipEmptyLines: true,
       complete: (results) => {
         setCsvData(results.data as Record<string, unknown>[]);
+        setCsvHeaders(
+          (results.meta?.fields ?? []).filter(
+            (h): h is string => typeof h === "string" && h.trim().length > 0,
+          ),
+        );
         toast.success(`Parsed ${results.data.length} rows from CSV`);
       },
       error: (err) => {
         toast.error(`Failed to parse CSV: ${err.message}`);
         setCsvData(null);
+        setCsvHeaders(null);
       },
     });
   }, []);
@@ -142,6 +152,7 @@ export default function UploadPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           rows: csvData,
+          headers: csvHeaders ?? undefined,
           organizationId: selectedOrg || undefined,
         }),
       });
@@ -149,6 +160,16 @@ export default function UploadPage() {
       const data = await res.json();
 
       if (!res.ok) {
+        // Surface server-side structured errors (missing headers, oversize)
+        // before throwing the generic message.
+        if (
+          Array.isArray(data?.missingHeaders) &&
+          data.missingHeaders.length > 0
+        ) {
+          throw new Error(
+            `CSV upload is missing required columns: ${data.missingHeaders.join(", ")}`,
+          );
+        }
         throw new Error(data.error || "Upload failed");
       }
 

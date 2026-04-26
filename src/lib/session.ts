@@ -1,9 +1,7 @@
 import { cookies } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
+import { getJwtSecretBytes } from "./jwt-secret";
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || "map-my-dev-data-secret-change-in-production"
-);
 const SESSION_COOKIE_NAME = "mmdd-session";
 
 interface SessionPayload {
@@ -25,7 +23,7 @@ export async function createSessionToken(user: {
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("7d")
-    .sign(JWT_SECRET);
+    .sign(getJwtSecretBytes());
 }
 
 export async function setSessionCookie(token: string) {
@@ -45,7 +43,7 @@ export async function getSession(): Promise<SessionPayload | null> {
     const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
     if (!token) return null;
 
-    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const { payload } = await jwtVerify(token, getJwtSecretBytes());
     return {
       userId: payload.userId as string,
       email: payload.email as string,

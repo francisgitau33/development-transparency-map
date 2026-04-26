@@ -207,6 +207,49 @@ export async function GET(request: NextRequest) {
     };
 
     // =========================================================================
+    // PART B.1 — Budget Pipeline by Status
+    // =========================================================================
+    // Aggregates recorded budget and project counts per project status bucket.
+    // Consumed by the "Budget Pipeline by Status" widget on the Reports page.
+    // Statuses align with Project.status ("ACTIVE" / "PLANNED" / "COMPLETED").
+    // Other / unrecognised statuses are grouped under "OTHER" defensively so
+    // the widget never silently drops rows if the enum is extended upstream.
+    const pipelineStatuses = ["ACTIVE", "PLANNED", "COMPLETED"] as const;
+    const budgetByStatus: Record<
+      string,
+      { status: string; projectCount: number; recordedBudget: number }
+    > = {
+      ACTIVE: { status: "ACTIVE", projectCount: 0, recordedBudget: 0 },
+      PLANNED: { status: "PLANNED", projectCount: 0, recordedBudget: 0 },
+      COMPLETED: { status: "COMPLETED", projectCount: 0, recordedBudget: 0 },
+    };
+    let otherStatusCount = 0;
+    let otherStatusBudget = 0;
+    for (const p of projects) {
+      const bucket = budgetByStatus[p.status];
+      if (bucket) {
+        bucket.projectCount += 1;
+        bucket.recordedBudget += p.budgetUsd ?? 0;
+      } else {
+        otherStatusCount += 1;
+        otherStatusBudget += p.budgetUsd ?? 0;
+      }
+    }
+    const budgetPipelineByStatus = pipelineStatuses
+      .map((s) => budgetByStatus[s])
+      .concat(
+        otherStatusCount > 0
+          ? [
+              {
+                status: "OTHER",
+                projectCount: otherStatusCount,
+                recordedBudget: otherStatusBudget,
+              },
+            ]
+          : [],
+      );
+
+    // =========================================================================
     // PART C — Development Distribution
     // =========================================================================
     type Bucket = {
@@ -776,6 +819,7 @@ export async function GET(request: NextRequest) {
       scatterData,
       outlierTables,
       dataCompleteness,
+      budgetPipelineByStatus,
       appliedFilters,
       dataNotes,
       role: user.role.role,

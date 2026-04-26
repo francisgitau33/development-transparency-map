@@ -6,9 +6,25 @@ import {
 } from "@/lib/auth";
 import { createSessionToken, setSessionCookie } from "@/lib/session";
 import { BRANDING } from "@/lib/branding";
+import {
+  checkRateLimit,
+  getClientIp,
+  RATE_LIMITS,
+  rateLimitedResponse,
+} from "@/lib/rate-limit";
 
 export async function POST(request: NextRequest) {
   try {
+    // Server-side rate limit: 10 / min / IP. Neutral wording on 429 —
+    // does not reveal whether an account exists.
+    const rl = checkRateLimit({
+      bucket: "login",
+      key: getClientIp(request),
+      limit: RATE_LIMITS.login.limit,
+      windowMs: RATE_LIMITS.login.windowMs,
+    });
+    if (!rl.success) return rateLimitedResponse(rl);
+
     const { email, password } = await request.json();
 
     if (!email || !password) {

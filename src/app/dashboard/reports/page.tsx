@@ -191,6 +191,12 @@ interface DataCompleteness {
   warnings: string[];
 }
 
+interface BudgetPipelineRow {
+  status: string;
+  projectCount: number;
+  recordedBudget: number;
+}
+
 interface Analytics {
   summaryCards: SummaryCards;
   distribution: Distribution;
@@ -200,6 +206,7 @@ interface Analytics {
   scatterData: ScatterPoint[];
   outlierTables: OutlierTables;
   dataCompleteness: DataCompleteness;
+  budgetPipelineByStatus: BudgetPipelineRow[];
   appliedFilters: Record<string, string | null>;
   dataNotes: string[];
   role: "SYSTEM_OWNER" | "PARTNER_ADMIN";
@@ -771,6 +778,316 @@ function PlaceholderCard({
         <div className="h-[140px] rounded-md border border-dashed border-slate-300 bg-white/70 flex items-center justify-center text-xs text-slate-500 text-center px-4">
           {note}
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// =============================================================================
+// Wired report cards (replace earlier "Coming soon" placeholders)
+// =============================================================================
+
+/**
+ * Geographic Coverage Ratio — real card backed by the spatial vulnerability
+ * endpoint's summary. Displayed inside the "Development Coverage" section.
+ *
+ * Data origin:
+ *   - `spatial.summary.geographicCoverageRatio`   (percentage 0..100)
+ *   - `spatial.summary.areasWithAnyCoverage`      (covered count)
+ *   - `spatial.summary.totalAdministrativeAreas`  (denominator)
+ *
+ * The card respects the existing Reports filters because the underlying
+ * spatial endpoint is filtered by the same state as the rest of the page.
+ */
+function GeographicCoverageRatioCard({
+  spatial,
+}: {
+  spatial: SpatialVulnerability | null;
+}) {
+  const summary = spatial?.summary;
+  const ratio = summary?.geographicCoverageRatio ?? null;
+  const covered = summary?.areasWithAnyCoverage ?? null;
+  const total = summary?.totalAdministrativeAreas ?? null;
+
+  return (
+    <Card data-design-id="card-geographic-coverage-ratio">
+      <CardHeader className="pb-2">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="text-sky-600 shrink-0">
+              <Globe className="w-5 h-5" />
+            </div>
+            <CardTitle className="text-base text-slate-900 truncate">
+              Geographic Coverage Ratio
+            </CardTitle>
+          </div>
+        </div>
+        <CardDescription className="text-slate-600">
+          Proportion of Districts / Counties with at least one active or
+          planned project in the current dataset.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {ratio == null || total == null || total === 0 ? (
+          <EmptyChart message="Insufficient data: no Districts / Counties available for the current filters." />
+        ) : (
+          <div className="space-y-3">
+            <div className="flex items-baseline gap-3">
+              <div
+                data-design-id="geo-coverage-ratio-value"
+                className="text-3xl font-bold tabular-nums text-slate-900"
+              >
+                {formatPercent(ratio, 1)}
+              </div>
+              <div className="text-sm text-slate-600">
+                {formatNumber(covered ?? 0)} of {formatNumber(total)} areas
+              </div>
+            </div>
+            <div
+              data-design-id="geo-coverage-progress"
+              className="h-2 w-full rounded bg-slate-100 overflow-hidden"
+              role="presentation"
+            >
+              <div
+                className="h-full bg-sky-500"
+                style={{
+                  width: `${Math.max(0, Math.min(100, ratio))}%`,
+                }}
+              />
+            </div>
+            <p className="text-xs text-slate-500">
+              Based on active District / County reference data and recorded
+              active or planned projects.
+            </p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Budget Pipeline by Status — real card driven by the new
+ * `budgetPipelineByStatus` field on the development-analytics endpoint.
+ * Displays recorded budget and project count per status bucket.
+ */
+function BudgetPipelineByStatusCard({
+  rows,
+}: {
+  rows: BudgetPipelineRow[] | undefined;
+}) {
+  // Canonical ordering with friendly labels + colours.
+  const ORDER: Array<{ status: string; label: string; color: string }> = [
+    { status: "ACTIVE", label: "Active", color: "#0ea5e9" },
+    { status: "PLANNED", label: "Planned", color: "#f59e0b" },
+    { status: "COMPLETED", label: "Completed", color: "#10b981" },
+    { status: "OTHER", label: "Other", color: "#94a3b8" },
+  ];
+
+  const byStatus = new Map<string, BudgetPipelineRow>();
+  for (const r of rows ?? []) byStatus.set(r.status, r);
+
+  const display = ORDER.flatMap((o) => {
+    const r = byStatus.get(o.status);
+    if (!r) return [];
+    if (o.status === "OTHER" && r.projectCount === 0) return [];
+    return [{ ...o, row: r }];
+  });
+
+  const total = display.reduce((acc, d) => acc + d.row.recordedBudget, 0);
+  const hasAny = display.some((d) => d.row.projectCount > 0);
+
+  return (
+    <Card data-design-id="card-budget-pipeline-by-status">
+      <CardHeader className="pb-2">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="text-sky-600 shrink-0">
+              <TrendingUp className="w-5 h-5" />
+            </div>
+            <CardTitle className="text-base text-slate-900 truncate">
+              Budget Pipeline by Status
+            </CardTitle>
+          </div>
+        </div>
+        <CardDescription className="text-slate-600">
+          Recorded budget distributed across planned, active, and completed
+          projects.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {!hasAny ? (
+          <EmptyChart message="No project records with status available for the current filters." />
+        ) : (
+          <div className="space-y-3">
+            {display.map((d) => {
+              const widthPct =
+                total > 0 ? (d.row.recordedBudget / total) * 100 : 0;
+              return (
+                <div
+                  key={d.status}
+                  data-design-id={`pipeline-row-${d.status.toLowerCase()}`}
+                  className="space-y-1"
+                >
+                  <div className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-2">
+                      <span
+                        aria-hidden="true"
+                        className="inline-block w-2.5 h-2.5 rounded-sm"
+                        style={{ backgroundColor: d.color }}
+                      />
+                      <span className="font-medium text-slate-800">
+                        {d.label}
+                      </span>
+                      <span className="text-xs text-slate-500">
+                        · {formatNumber(d.row.projectCount)} project
+                        {d.row.projectCount === 1 ? "" : "s"}
+                      </span>
+                    </div>
+                    <div className="text-sm tabular-nums text-slate-800 font-medium">
+                      {formatCurrencyCompact(d.row.recordedBudget)}
+                    </div>
+                  </div>
+                  <div
+                    className="h-2 rounded bg-slate-100 overflow-hidden"
+                    role="presentation"
+                  >
+                    <div
+                      className="h-full"
+                      style={{
+                        width: `${Math.max(0, Math.min(100, widthPct))}%`,
+                        backgroundColor: d.color,
+                      }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+            <p className="text-xs text-slate-500">
+              Budget pipeline is based on recorded project status and budget
+              values.
+            </p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Donor Dependency — concentration card computed from the existing
+ * Budget by Donor distribution.
+ *
+ * Notes:
+ *   - Language is deliberately neutral. Concentration alone does NOT imply
+ *     funding risk — the PRD requires that context be stated explicitly.
+ *   - The "Unknown / Not Provided" bucket is excluded from the concentration
+ *     denominator so that missing donor attribution does not distort shares.
+ *     It is reported separately for transparency.
+ */
+function DonorDependencyCard({
+  budgetByDonor,
+}: {
+  budgetByDonor: Array<{ key: string; name: string; budget: number }>;
+}) {
+  const unknown = budgetByDonor.find((d) => d.key === "_unknown");
+  const attributed = budgetByDonor.filter((d) => d.key !== "_unknown");
+  const sortedDesc = [...attributed].sort((a, b) => b.budget - a.budget);
+  const attributedTotal = sortedDesc.reduce((acc, d) => acc + d.budget, 0);
+  const donorCount = sortedDesc.filter((d) => d.budget > 0).length;
+
+  const shareOfTopN = (n: number): number | null => {
+    if (attributedTotal <= 0) return null;
+    const sum = sortedDesc
+      .slice(0, n)
+      .reduce((acc, d) => acc + d.budget, 0);
+    return (sum / attributedTotal) * 100;
+  };
+
+  const topOne = sortedDesc[0];
+  const topOneShare = shareOfTopN(1);
+  const topThreeShare = shareOfTopN(3);
+  const topFiveShare = shareOfTopN(5);
+
+  const hasAttributed = attributedTotal > 0 && donorCount > 0;
+
+  return (
+    <Card data-design-id="card-donor-dependency">
+      <CardHeader className="pb-2">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="text-sky-600 shrink-0">
+              <Network className="w-5 h-5" />
+            </div>
+            <CardTitle className="text-base text-slate-900 truncate">
+              Donor Dependency
+            </CardTitle>
+          </div>
+          <Badge
+            variant="outline"
+            className="bg-slate-50 text-slate-600 border-slate-300 whitespace-nowrap"
+          >
+            {formatNumber(donorCount)} donors
+          </Badge>
+        </div>
+        <CardDescription className="text-slate-600">
+          Concentration of recorded donor budget among the largest donors in
+          the current dataset.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {!hasAttributed ? (
+          <EmptyChart message="No donor budget data available for the current filters." />
+        ) : (
+          <div className="space-y-3">
+            <div
+              className="grid grid-cols-3 gap-2"
+              data-design-id="donor-dependency-shares"
+            >
+              <div className="rounded-md border border-slate-200 p-2.5">
+                <div className="text-xs text-slate-500">Top donor</div>
+                <div className="text-lg font-bold tabular-nums text-slate-900">
+                  {topOneShare != null ? formatPercent(topOneShare, 1) : "—"}
+                </div>
+                <div className="text-[11px] text-slate-500 truncate">
+                  {topOne?.name ?? "—"}
+                </div>
+              </div>
+              <div className="rounded-md border border-slate-200 p-2.5">
+                <div className="text-xs text-slate-500">Top 3</div>
+                <div className="text-lg font-bold tabular-nums text-slate-900">
+                  {topThreeShare != null
+                    ? formatPercent(topThreeShare, 1)
+                    : "—"}
+                </div>
+                <div className="text-[11px] text-slate-500">combined share</div>
+              </div>
+              <div className="rounded-md border border-slate-200 p-2.5">
+                <div className="text-xs text-slate-500">Top 5</div>
+                <div className="text-lg font-bold tabular-nums text-slate-900">
+                  {topFiveShare != null
+                    ? formatPercent(topFiveShare, 1)
+                    : "—"}
+                </div>
+                <div className="text-[11px] text-slate-500">combined share</div>
+              </div>
+            </div>
+            {unknown && unknown.budget > 0 ? (
+              <div className="text-xs text-slate-500">
+                <span className="font-medium text-slate-600">
+                  Unknown / Not Provided:
+                </span>{" "}
+                {formatCurrencyCompact(unknown.budget)} excluded from
+                concentration shares above.
+              </div>
+            ) : null}
+            <p className="text-xs text-slate-500">
+              Donor concentration reflects recorded project budgets in the
+              current dataset. It does not imply funding risk unless
+              interpreted alongside project timelines and replacement funding.
+            </p>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -1540,13 +1857,10 @@ export default function ReportsPage() {
                 dataDesignId="placeholder-sector-concentration"
               />
 
-              {/* Planned reporting enhancement: Geographic Coverage Ratio */}
-              <PlaceholderCard
-                icon={<Globe className="w-5 h-5" />}
-                title="Geographic Coverage Ratio"
-                description="Proportion of Districts / Counties with at least one active or planned project."
-                dataDesignId="placeholder-geo-coverage-ratio"
-              />
+              {/* Geographic Coverage Ratio — sourced from the spatial
+                  vulnerability endpoint's summary so it always stays in
+                  sync with the Spatial section further down. */}
+              <GeographicCoverageRatioCard spatial={spatial} />
             </div>
           </section>
 
@@ -1850,20 +2164,16 @@ export default function ReportsPage() {
                 </CardContent>
               </Card>
 
-              {/* Planned reporting enhancement: Donor Dependency */}
-              <PlaceholderCard
-                icon={<Network className="w-5 h-5" />}
-                title="Donor Dependency"
-                description="How concentrated funding is among a small number of donors, per sector and per District / County."
-                dataDesignId="placeholder-donor-dependency"
+              {/* Donor Dependency — concentration of recorded donor
+                  budget, derived from distribution.budgetByDonor. */}
+              <DonorDependencyCard
+                budgetByDonor={analytics.distribution.budgetByDonor}
               />
 
-              {/* Planned reporting enhancement: Budget Pipeline by Status */}
-              <PlaceholderCard
-                icon={<TrendingUp className="w-5 h-5" />}
-                title="Budget Pipeline by Status"
-                description="Recorded budget distributed across planned, active, and completed projects."
-                dataDesignId="placeholder-budget-pipeline"
+              {/* Budget Pipeline by Status — recorded budget and project
+                  counts per status bucket. */}
+              <BudgetPipelineByStatusCard
+                rows={analytics.budgetPipelineByStatus}
               />
             </div>
           </section>

@@ -39,7 +39,8 @@ interface AuthContextType {
     email: string,
     password: string,
     displayName?: string,
-    organizationName?: string
+    organizationName?: string,
+    captchaToken?: string
   ) => Promise<{ success: boolean; error?: string; redirectTo?: string }>;
   logout: () => Promise<void>;
   refreshSession: () => Promise<void>;
@@ -94,13 +95,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     email: string,
     password: string,
     displayName?: string,
-    organizationName?: string
+    organizationName?: string,
+    captchaToken?: string
   ) => {
     try {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, displayName, organizationName }),
+        body: JSON.stringify({
+          email,
+          password,
+          displayName,
+          organizationName,
+          captchaToken,
+        }),
       });
       const data = await res.json();
 

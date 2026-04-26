@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
+import { getJwtSecretBytes } from "./lib/jwt-secret";
 
 /**
  * Server-side route protection for authenticated dashboard pages.
@@ -23,14 +24,10 @@ import { jwtVerify } from "jose";
 
 const SESSION_COOKIE_NAME = "mmdd-session";
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || "map-my-dev-data-secret-change-in-production",
-);
-
 async function verifySessionToken(token: string | undefined): Promise<boolean> {
   if (!token) return false;
   try {
-    await jwtVerify(token, JWT_SECRET);
+    await jwtVerify(token, getJwtSecretBytes());
     return true;
   } catch {
     return false;
