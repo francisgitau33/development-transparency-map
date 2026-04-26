@@ -47,13 +47,21 @@ import {
 import {
   AlertTriangle,
   Building2,
+  CalendarClock,
+  Clock,
   DollarSign,
   Filter,
   FolderOpen,
   Globe,
   Info,
+  Layers,
+  Lock,
   MapPin,
+  Network,
+  ShieldAlert,
+  Sprout,
   Target,
+  TrendingDown,
   TrendingUp,
   Users,
   X,
@@ -338,6 +346,67 @@ function SummaryCard({
         {sublabel && (
           <div className="text-xs text-slate-500 mt-1">{sublabel}</div>
         )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * PlaceholderCard renders a visually distinct, clearly-labelled placeholder for
+ * widgets scheduled for the next reporting phase. It keeps the information
+ * architecture stable so that Prompt 3 can populate each slot without changing
+ * the page layout.
+ *
+ * The card is presentation-only: it does not fetch, compute, or render any
+ * data and is announced to assistive technology via `aria-disabled`.
+ */
+function PlaceholderCard({
+  icon,
+  title,
+  description,
+  note = "Planned for next reporting phase.",
+  dataDesignId,
+  className,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  note?: string;
+  dataDesignId?: string;
+  className?: string;
+}) {
+  return (
+    <Card
+      aria-disabled="true"
+      data-design-id={dataDesignId}
+      className={`border-dashed border-slate-300 bg-slate-50/60 ${
+        className ?? ""
+      }`}
+    >
+      <CardHeader className="pb-2">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="text-slate-400 shrink-0">{icon}</div>
+            <CardTitle className="text-base text-slate-600 truncate">
+              {title}
+            </CardTitle>
+          </div>
+          <Badge
+            variant="outline"
+            className="bg-white text-slate-500 border-slate-300 whitespace-nowrap"
+          >
+            <Lock className="w-3 h-3 mr-1" aria-hidden="true" />
+            Coming soon
+          </Badge>
+        </div>
+        <CardDescription className="text-slate-500">
+          {description}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="h-[140px] rounded-md border border-dashed border-slate-300 bg-white/70 flex items-center justify-center text-xs text-slate-500 text-center px-4">
+          {note}
+        </div>
       </CardContent>
     </Card>
   );
@@ -676,6 +745,44 @@ export default function ReportsPage() {
                 </SelectContent>
               </Select>
             </div>
+
+            {/*
+              Funding Cliff Window — visible but disabled placeholder.
+              Preserved in the DOM so the next reporting phase can enable it
+              without re-arranging the filter grid.
+            */}
+            <div className="grid gap-1.5">
+              <div className="flex items-center justify-between">
+                <Label
+                  htmlFor="reports-filter-funding-cliff-window"
+                  className="text-slate-500"
+                >
+                  Funding Cliff Window
+                </Label>
+                <Badge
+                  variant="outline"
+                  className="bg-slate-50 text-slate-500 border-slate-200 text-[10px] font-medium"
+                >
+                  <Lock className="w-3 h-3 mr-1" aria-hidden="true" />
+                  Coming soon
+                </Badge>
+              </div>
+              <Select value="_disabled" disabled>
+                <SelectTrigger
+                  id="reports-filter-funding-cliff-window"
+                  data-design-id="reports-filter-funding-cliff-window"
+                  title="Coming in next reporting phase"
+                  aria-disabled="true"
+                >
+                  <SelectValue placeholder="Coming in next reporting phase" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_disabled" disabled>
+                    Coming in next reporting phase
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           {hasFilters && (
@@ -798,22 +905,28 @@ export default function ReportsPage() {
           </section>
 
           {/* -------------------------------------------------------------- */}
-          {/* 3. Development Distribution                                    */}
+          {/* 3. Development Coverage                                        */}
           {/* -------------------------------------------------------------- */}
           <section
-            data-design-id="reports-distribution"
-            aria-labelledby="reports-distribution-heading"
+            data-design-id="reports-coverage"
+            aria-labelledby="reports-coverage-heading"
             className="space-y-3"
           >
-            <h2
-              id="reports-distribution-heading"
-              className="text-lg font-semibold text-slate-900"
-            >
-              Development Distribution
-            </h2>
+            <div className="space-y-1">
+              <h2
+                id="reports-coverage-heading"
+                className="text-lg font-semibold text-slate-900"
+              >
+                Development Coverage
+              </h2>
+              <p className="text-sm text-slate-600 max-w-3xl">
+                Where development activity is concentrated geographically, by
+                sector, and by implementing organisation.
+              </p>
+            </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* 1. Projects by Sector - donut */}
+              {/* Projects by Sector - donut */}
               <Card data-design-id="chart-projects-by-sector">
                 <CardHeader>
                   <CardTitle>Projects by Sector</CardTitle>
@@ -860,60 +973,7 @@ export default function ReportsPage() {
                 </CardContent>
               </Card>
 
-              {/* 2. Budget by Sector - bar */}
-              <Card data-design-id="chart-budget-by-sector">
-                <CardHeader>
-                  <CardTitle>Budget by Sector</CardTitle>
-                  <CardDescription>
-                    Total recorded budget grouped by sector.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {analytics.distribution.budgetBySector.some(
-                    (b) => b.budget > 0,
-                  ) ? (
-                    <ResponsiveContainer width="100%" height={320}>
-                      <BarChart
-                        data={analytics.distribution.budgetBySector}
-                        margin={{ top: 10, right: 20, bottom: 50, left: 0 }}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis
-                          dataKey="name"
-                          angle={-30}
-                          textAnchor="end"
-                          height={70}
-                          tick={{ fontSize: 12 }}
-                        />
-                        <YAxis
-                          tickFormatter={(v) => formatCurrencyCompact(v)}
-                          tick={{ fontSize: 12 }}
-                        />
-                        <Tooltip
-                          formatter={currencyTooltipFormatter("Budget")}
-                        />
-                        <Bar dataKey="budget" name="Budget" radius={[4, 4, 0, 0]}>
-                          {analytics.distribution.budgetBySector.map(
-                            (entry, i) => (
-                              <Cell
-                                key={`bsec-${entry.key}`}
-                                fill={
-                                  entry.color ??
-                                  CHART_PALETTE[i % CHART_PALETTE.length]
-                                }
-                              />
-                            ),
-                          )}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <EmptyChart message="No budget data available for the current filters." />
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* 3. Projects by District - horizontal bar */}
+              {/* Projects by District / County - horizontal bar */}
               <Card data-design-id="chart-projects-by-district">
                 <CardHeader>
                   <CardTitle>Projects by District / County</CardTitle>
@@ -961,66 +1021,11 @@ export default function ReportsPage() {
                 </CardContent>
               </Card>
 
-              {/* 4. Budget by District - horizontal bar */}
-              <Card data-design-id="chart-budget-by-district">
-                <CardHeader>
-                  <CardTitle>Budget by District / County</CardTitle>
-                  <CardDescription>
-                    Total recorded budget grouped by administrative area.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {analytics.distribution.budgetByDistrict.some(
-                    (b) => b.budget > 0,
-                  ) ? (
-                    <ResponsiveContainer
-                      width="100%"
-                      height={Math.max(
-                        240,
-                        Math.min(
-                          520,
-                          analytics.distribution.budgetByDistrict.length * 30,
-                        ),
-                      )}
-                    >
-                      <BarChart
-                        data={analytics.distribution.budgetByDistrict.slice(
-                          0,
-                          15,
-                        )}
-                        layout="vertical"
-                        margin={{ top: 5, right: 20, bottom: 5, left: 10 }}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis
-                          type="number"
-                          tickFormatter={(v) => formatCurrencyCompact(v)}
-                          tick={{ fontSize: 12 }}
-                        />
-                        <YAxis
-                          type="category"
-                          dataKey="name"
-                          width={160}
-                          tick={{ fontSize: 12 }}
-                        />
-                        <Tooltip
-                          formatter={currencyTooltipFormatter("Budget")}
-                        />
-                        <Bar
-                          dataKey="budget"
-                          fill="#10b981"
-                          radius={[0, 4, 4, 0]}
-                        />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <EmptyChart message="No District / County budget data is available for the current filters." />
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* 5. Projects by Organisation */}
-              <Card data-design-id="chart-projects-by-org">
+              {/* Projects by Implementing Organisation - horizontal bar */}
+              <Card
+                data-design-id="chart-projects-by-org"
+                className="lg:col-span-2"
+              >
                 <CardHeader>
                   <CardTitle>Projects by Implementing Organisation</CardTitle>
                   <CardDescription>
@@ -1053,7 +1058,7 @@ export default function ReportsPage() {
                         <YAxis
                           type="category"
                           dataKey="name"
-                          width={180}
+                          width={200}
                           tick={{ fontSize: 12 }}
                         />
                         <Tooltip
@@ -1072,66 +1077,75 @@ export default function ReportsPage() {
                 </CardContent>
               </Card>
 
-              {/* 6. Budget by Organisation */}
-              <Card data-design-id="chart-budget-by-org">
+              {/* Organisation-to-District Matrix */}
+              <Card
+                data-design-id="matrix-org-district"
+                className="lg:col-span-2"
+              >
                 <CardHeader>
-                  <CardTitle>Budget by Implementing Organisation</CardTitle>
+                  <CardTitle>Organisation-to-District Matrix</CardTitle>
                   <CardDescription>
-                    Total recorded budget grouped by implementing organisation.
+                    Project counts by implementing organisation and District /
+                    County.
+                    {analytics.organisationDistrictMatrix.note
+                      ? ` ${analytics.organisationDistrictMatrix.note}`
+                      : ""}
                   </CardDescription>
                 </CardHeader>
-                <CardContent>
-                  {analytics.distribution.budgetByOrganization.some(
-                    (b) => b.budget > 0,
-                  ) ? (
-                    <ResponsiveContainer
-                      width="100%"
-                      height={Math.max(
-                        240,
-                        Math.min(
-                          520,
-                          analytics.distribution.budgetByOrganization.length *
-                            30,
-                        ),
-                      )}
-                    >
-                      <BarChart
-                        data={analytics.distribution.budgetByOrganization.slice(
-                          0,
-                          15,
-                        )}
-                        layout="vertical"
-                        margin={{ top: 5, right: 20, bottom: 5, left: 10 }}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis
-                          type="number"
-                          tickFormatter={(v) => formatCurrencyCompact(v)}
-                          tick={{ fontSize: 12 }}
-                        />
-                        <YAxis
-                          type="category"
-                          dataKey="name"
-                          width={180}
-                          tick={{ fontSize: 12 }}
-                        />
-                        <Tooltip
-                          formatter={currencyTooltipFormatter("Budget")}
-                        />
-                        <Bar
-                          dataKey="budget"
-                          fill="#f59e0b"
-                          radius={[0, 4, 4, 0]}
-                        />
-                      </BarChart>
-                    </ResponsiveContainer>
+                <CardContent className="overflow-x-auto">
+                  {analytics.organisationDistrictMatrix.rows.length > 0 &&
+                  analytics.organisationDistrictMatrix.columns.length > 0 ? (
+                    <OrgDistrictMatrixTable
+                      matrix={analytics.organisationDistrictMatrix}
+                    />
                   ) : (
-                    <EmptyChart message="No organisation budget data available for the current filters." />
+                    <EmptyChart message="No organisation / District data available for the current filters." />
                   )}
                 </CardContent>
               </Card>
 
-              {/* 7. Budget by Donor - donut */}
+              {/* Planned reporting enhancement: Sector Concentration by District / County */}
+              <PlaceholderCard
+                icon={<Layers className="w-5 h-5" />}
+                title="Sector Concentration by District / County"
+                description="Share of sector activity concentrated in each District / County."
+                dataDesignId="placeholder-sector-concentration"
+              />
+
+              {/* Planned reporting enhancement: Geographic Coverage Ratio */}
+              <PlaceholderCard
+                icon={<Globe className="w-5 h-5" />}
+                title="Geographic Coverage Ratio"
+                description="Proportion of Districts / Counties with at least one active or planned project."
+                dataDesignId="placeholder-geo-coverage-ratio"
+              />
+            </div>
+          </section>
+
+          {/* -------------------------------------------------------------- */}
+          {/* 4. Funding Intelligence                                        */}
+          {/* -------------------------------------------------------------- */}
+          <section
+            data-design-id="reports-funding-intelligence"
+            aria-labelledby="reports-funding-heading"
+            className="space-y-3"
+          >
+            <div className="space-y-1">
+              <h2
+                id="reports-funding-heading"
+                className="text-lg font-semibold text-slate-900"
+              >
+                Funding Intelligence
+              </h2>
+              <p className="text-sm text-slate-600 max-w-3xl">
+                Who is funding what, where funding is concentrated, and whether
+                recorded funding appears concentrated among a small number of
+                donors.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Budget by Donor - donut + legend */}
               <Card
                 data-design-id="chart-budget-by-donor"
                 className="lg:col-span-2"
@@ -1208,89 +1222,243 @@ export default function ReportsPage() {
                   )}
                 </CardContent>
               </Card>
+
+              {/* Budget by Sector - bar */}
+              <Card data-design-id="chart-budget-by-sector">
+                <CardHeader>
+                  <CardTitle>Budget by Sector</CardTitle>
+                  <CardDescription>
+                    Total recorded budget grouped by sector.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {analytics.distribution.budgetBySector.some(
+                    (b) => b.budget > 0,
+                  ) ? (
+                    <ResponsiveContainer width="100%" height={320}>
+                      <BarChart
+                        data={analytics.distribution.budgetBySector}
+                        margin={{ top: 10, right: 20, bottom: 50, left: 0 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis
+                          dataKey="name"
+                          angle={-30}
+                          textAnchor="end"
+                          height={70}
+                          tick={{ fontSize: 12 }}
+                        />
+                        <YAxis
+                          tickFormatter={(v) => formatCurrencyCompact(v)}
+                          tick={{ fontSize: 12 }}
+                        />
+                        <Tooltip
+                          formatter={currencyTooltipFormatter("Budget")}
+                        />
+                        <Bar dataKey="budget" name="Budget" radius={[4, 4, 0, 0]}>
+                          {analytics.distribution.budgetBySector.map(
+                            (entry, i) => (
+                              <Cell
+                                key={`bsec-${entry.key}`}
+                                fill={
+                                  entry.color ??
+                                  CHART_PALETTE[i % CHART_PALETTE.length]
+                                }
+                              />
+                            ),
+                          )}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <EmptyChart message="No budget data available for the current filters." />
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Budget by District / County - horizontal bar */}
+              <Card data-design-id="chart-budget-by-district">
+                <CardHeader>
+                  <CardTitle>Budget by District / County</CardTitle>
+                  <CardDescription>
+                    Total recorded budget grouped by administrative area.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {analytics.distribution.budgetByDistrict.some(
+                    (b) => b.budget > 0,
+                  ) ? (
+                    <ResponsiveContainer
+                      width="100%"
+                      height={Math.max(
+                        240,
+                        Math.min(
+                          520,
+                          analytics.distribution.budgetByDistrict.length * 30,
+                        ),
+                      )}
+                    >
+                      <BarChart
+                        data={analytics.distribution.budgetByDistrict.slice(
+                          0,
+                          15,
+                        )}
+                        layout="vertical"
+                        margin={{ top: 5, right: 20, bottom: 5, left: 10 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis
+                          type="number"
+                          tickFormatter={(v) => formatCurrencyCompact(v)}
+                          tick={{ fontSize: 12 }}
+                        />
+                        <YAxis
+                          type="category"
+                          dataKey="name"
+                          width={160}
+                          tick={{ fontSize: 12 }}
+                        />
+                        <Tooltip
+                          formatter={currencyTooltipFormatter("Budget")}
+                        />
+                        <Bar
+                          dataKey="budget"
+                          fill="#10b981"
+                          radius={[0, 4, 4, 0]}
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <EmptyChart message="No District / County budget data is available for the current filters." />
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Budget by Implementing Organisation */}
+              <Card
+                data-design-id="chart-budget-by-org"
+                className="lg:col-span-2"
+              >
+                <CardHeader>
+                  <CardTitle>Budget by Implementing Organisation</CardTitle>
+                  <CardDescription>
+                    Total recorded budget grouped by implementing organisation.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {analytics.distribution.budgetByOrganization.some(
+                    (b) => b.budget > 0,
+                  ) ? (
+                    <ResponsiveContainer
+                      width="100%"
+                      height={Math.max(
+                        240,
+                        Math.min(
+                          520,
+                          analytics.distribution.budgetByOrganization.length *
+                            30,
+                        ),
+                      )}
+                    >
+                      <BarChart
+                        data={analytics.distribution.budgetByOrganization.slice(
+                          0,
+                          15,
+                        )}
+                        layout="vertical"
+                        margin={{ top: 5, right: 20, bottom: 5, left: 10 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis
+                          type="number"
+                          tickFormatter={(v) => formatCurrencyCompact(v)}
+                          tick={{ fontSize: 12 }}
+                        />
+                        <YAxis
+                          type="category"
+                          dataKey="name"
+                          width={200}
+                          tick={{ fontSize: 12 }}
+                        />
+                        <Tooltip
+                          formatter={currencyTooltipFormatter("Budget")}
+                        />
+                        <Bar
+                          dataKey="budget"
+                          fill="#f59e0b"
+                          radius={[0, 4, 4, 0]}
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <EmptyChart message="No organisation budget data available for the current filters." />
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Donor-to-Sector Matrix */}
+              <Card
+                data-design-id="matrix-donor-sector"
+                className="lg:col-span-2"
+              >
+                <CardHeader>
+                  <CardTitle>Donor-to-Sector Matrix</CardTitle>
+                  <CardDescription>
+                    {analytics.donorSectorMatrix.metric === "budget"
+                      ? "Total budget by donor and sector."
+                      : "Project count by donor and sector."}
+                    {analytics.donorSectorMatrix.note
+                      ? ` ${analytics.donorSectorMatrix.note}`
+                      : ""}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="overflow-x-auto">
+                  {analytics.donorSectorMatrix.rows.length > 0 &&
+                  analytics.donorSectorMatrix.columns.length > 0 ? (
+                    <DonorSectorMatrixTable matrix={analytics.donorSectorMatrix} />
+                  ) : (
+                    <EmptyChart message="No donor / sector data available for the current filters." />
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Planned reporting enhancement: Donor Dependency */}
+              <PlaceholderCard
+                icon={<Network className="w-5 h-5" />}
+                title="Donor Dependency"
+                description="How concentrated funding is among a small number of donors, per sector and per District / County."
+                dataDesignId="placeholder-donor-dependency"
+              />
+
+              {/* Planned reporting enhancement: Budget Pipeline by Status */}
+              <PlaceholderCard
+                icon={<TrendingUp className="w-5 h-5" />}
+                title="Budget Pipeline by Status"
+                description="Recorded budget distributed across planned, active, and completed projects."
+                dataDesignId="placeholder-budget-pipeline"
+              />
             </div>
           </section>
 
           {/* -------------------------------------------------------------- */}
-          {/* 4. Donor & Actor Intelligence                                  */}
+          {/* 5. Efficiency & Reach                                          */}
           {/* -------------------------------------------------------------- */}
           <section
-            data-design-id="reports-actor-intelligence"
-            aria-labelledby="reports-actor-heading"
+            data-design-id="reports-efficiency-reach"
+            aria-labelledby="reports-efficiency-heading"
             className="space-y-3"
           >
-            <h2
-              id="reports-actor-heading"
-              className="text-lg font-semibold text-slate-900"
-            >
-              Donor &amp; Actor Intelligence
-            </h2>
-
-            {/* Donor-to-Sector matrix */}
-            <Card data-design-id="matrix-donor-sector">
-              <CardHeader>
-                <CardTitle>Donor-to-Sector Matrix</CardTitle>
-                <CardDescription>
-                  {analytics.donorSectorMatrix.metric === "budget"
-                    ? "Total budget by donor and sector."
-                    : "Project count by donor and sector."}
-                  {analytics.donorSectorMatrix.note
-                    ? ` ${analytics.donorSectorMatrix.note}`
-                    : ""}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="overflow-x-auto">
-                {analytics.donorSectorMatrix.rows.length > 0 &&
-                analytics.donorSectorMatrix.columns.length > 0 ? (
-                  <DonorSectorMatrixTable matrix={analytics.donorSectorMatrix} />
-                ) : (
-                  <EmptyChart message="No donor / sector data available for the current filters." />
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Organisation-to-District matrix */}
-            <Card data-design-id="matrix-org-district">
-              <CardHeader>
-                <CardTitle>Organisation-to-District Matrix</CardTitle>
-                <CardDescription>
-                  Project counts by implementing organisation and District /
-                  County.
-                  {analytics.organisationDistrictMatrix.note
-                    ? ` ${analytics.organisationDistrictMatrix.note}`
-                    : ""}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="overflow-x-auto">
-                {analytics.organisationDistrictMatrix.rows.length > 0 &&
-                analytics.organisationDistrictMatrix.columns.length > 0 ? (
-                  <OrgDistrictMatrixTable
-                    matrix={analytics.organisationDistrictMatrix}
-                  />
-                ) : (
-                  <EmptyChart message="No organisation / District data available for the current filters." />
-                )}
-              </CardContent>
-            </Card>
-          </section>
-
-          {/* -------------------------------------------------------------- */}
-          {/* 5. Cost Effectiveness & Reach                                  */}
-          {/* -------------------------------------------------------------- */}
-          <section
-            data-design-id="reports-cost-effectiveness"
-            aria-labelledby="reports-cpb-heading"
-            className="space-y-3"
-          >
-            <h2
-              id="reports-cpb-heading"
-              className="text-lg font-semibold text-slate-900"
-            >
-              Cost Effectiveness &amp; Reach
-            </h2>
-            <p className="text-xs text-slate-500 max-w-3xl">
-              {analytics.costPerBeneficiary.note}
-            </p>
+            <div className="space-y-1">
+              <h2
+                id="reports-efficiency-heading"
+                className="text-lg font-semibold text-slate-900"
+              >
+                Efficiency &amp; Reach
+              </h2>
+              <p className="text-sm text-slate-600 max-w-3xl">
+                {analytics.costPerBeneficiary.note}
+              </p>
+            </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <CpbCard
@@ -1310,7 +1478,7 @@ export default function ReportsPage() {
               />
             </div>
 
-            {/* Scatter */}
+            {/* Beneficiary Reach vs Budget scatter */}
             <Card data-design-id="chart-scatter">
               <CardHeader>
                 <CardTitle>Beneficiary Reach vs Budget</CardTitle>
@@ -1370,23 +1538,9 @@ export default function ReportsPage() {
                 )}
               </CardContent>
             </Card>
-          </section>
 
-          {/* -------------------------------------------------------------- */}
-          {/* 6. Outlier Review                                              */}
-          {/* -------------------------------------------------------------- */}
-          <section
-            data-design-id="reports-outliers"
-            aria-labelledby="reports-outliers-heading"
-            className="space-y-3"
-          >
-            <h2
-              id="reports-outliers-heading"
-              className="text-lg font-semibold text-slate-900"
-            >
-              Outlier Review
-            </h2>
-
+            {/* Project-level tables merged in from the former Outlier Review
+                section so Efficiency & Reach is a single coherent narrative. */}
             <OutlierTable
               title="Highest Cost per Beneficiary Projects"
               description="Top 10 projects ranked by cost per beneficiary. Only projects with both recorded budget and target beneficiaries appear here."
@@ -1416,18 +1570,80 @@ export default function ReportsPage() {
           </section>
 
           {/* -------------------------------------------------------------- */}
-          {/* 7. Data Completeness                                           */}
+          {/* 6. Risk & Vulnerability (placeholders only)                    */}
           {/* -------------------------------------------------------------- */}
           <section
-            data-design-id="reports-completeness"
-            aria-labelledby="reports-completeness-heading"
+            data-design-id="reports-risk-vulnerability"
+            aria-labelledby="reports-risk-heading"
+            className="space-y-3"
+          >
+            <div className="space-y-1">
+              <h2
+                id="reports-risk-heading"
+                className="text-lg font-semibold text-slate-900"
+              >
+                Risk &amp; Vulnerability
+              </h2>
+              <p className="text-sm text-slate-600 max-w-3xl">
+                Temporal and spatial vulnerability signals. These widgets are
+                planned for the next reporting phase and are shown as
+                placeholders so the dashboard structure remains stable.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+              <PlaceholderCard
+                icon={<ShieldAlert className="w-5 h-5" />}
+                title="Funding Cliff Risk"
+                description="Projected drop in active funding over the selected horizon."
+                dataDesignId="placeholder-funding-cliff-risk"
+              />
+              <PlaceholderCard
+                icon={<CalendarClock className="w-5 h-5" />}
+                title="Projects Ending Soon"
+                description="Active projects with an end date within the selected cliff window."
+                dataDesignId="placeholder-projects-ending-soon"
+              />
+              <PlaceholderCard
+                icon={<TrendingDown className="w-5 h-5" />}
+                title="Districts Losing More Than 50% Funding"
+                description="Districts / Counties where projected funding falls by more than half."
+                dataDesignId="placeholder-districts-losing-funding"
+              />
+              <PlaceholderCard
+                icon={<MapPin className="w-5 h-5" />}
+                title="No Active or Planned Intervention Districts"
+                description="Districts / Counties without any active or planned project."
+                dataDesignId="placeholder-no-intervention-districts"
+              />
+              <PlaceholderCard
+                icon={<Sprout className="w-5 h-5" />}
+                title="Low Investment Density Districts"
+                description="Districts / Counties with disproportionately low recorded investment per capita."
+                dataDesignId="placeholder-low-investment-density"
+              />
+              <PlaceholderCard
+                icon={<Clock className="w-5 h-5" />}
+                title="Upcoming Funding Gaps Timeline"
+                description="Calendar view of projected project closures across the selected window."
+                dataDesignId="placeholder-funding-gap-timeline"
+              />
+            </div>
+          </section>
+
+          {/* -------------------------------------------------------------- */}
+          {/* 7. Data Quality                                                */}
+          {/* -------------------------------------------------------------- */}
+          <section
+            data-design-id="reports-data-quality"
+            aria-labelledby="reports-data-quality-heading"
             className="space-y-3"
           >
             <h2
-              id="reports-completeness-heading"
+              id="reports-data-quality-heading"
               className="text-lg font-semibold text-slate-900"
             >
-              Data Completeness
+              Data Quality
             </h2>
 
             <Card>
