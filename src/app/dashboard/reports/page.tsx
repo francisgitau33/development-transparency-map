@@ -338,6 +338,158 @@ interface FundingCliffs {
   role: "SYSTEM_OWNER" | "PARTNER_ADMIN";
 }
 
+// ---------------------------------------------------------------------------
+// Spatial-vulnerability analytics (served by /api/reports/spatial-vulnerability).
+// ---------------------------------------------------------------------------
+
+type SpatialIndicatorLabel =
+  | "Lower recorded spatial vulnerability"
+  | "Moderate recorded spatial vulnerability"
+  | "High recorded spatial vulnerability"
+  | "Severe recorded spatial vulnerability";
+
+interface LowestIpb {
+  areaId: string;
+  areaName: string;
+  areaType: string | null;
+  countryCode: string;
+  countryName: string;
+  investmentPerBeneficiary: number;
+  totalBudget: number;
+  totalBeneficiaries: number;
+  activeCount: number;
+  plannedCount: number;
+}
+
+interface SpatialSummary {
+  totalAdministrativeAreas: number;
+  areasWithActiveProjects: number;
+  areasWithPlannedProjects: number;
+  areasWithNoActiveOrPlannedProjects: number;
+  areasWithAnyCoverage: number;
+  geographicCoverageRatio: number | null;
+  lowestInvestmentPerBeneficiary: LowestIpb | null;
+  calculableInvestmentPerBeneficiaryAreas: number;
+}
+
+interface NoCoverageRow {
+  areaId: string;
+  areaName: string;
+  areaType: string | null;
+  countryCode: string;
+  countryName: string;
+  activeCount: number;
+  plannedCount: number;
+  completedCount: number;
+  lastRecordedEndDate: string | null;
+  note: string;
+}
+
+interface LowCoverageRow {
+  areaId: string;
+  areaName: string;
+  areaType: string | null;
+  countryCode: string;
+  countryName: string;
+  activeCount: number;
+  plannedCount: number;
+  completedCount: number;
+  totalBudget: number;
+  totalBeneficiaries: number;
+  investmentPerBeneficiary: number | null;
+}
+
+interface IpbRow {
+  areaId: string;
+  areaName: string;
+  areaType: string | null;
+  countryCode: string;
+  countryName: string;
+  investmentPerBeneficiary: number;
+  totalBudget: number;
+  totalBeneficiaries: number;
+  activeCount: number;
+  plannedCount: number;
+}
+
+interface SectorCoverageCell {
+  areaId: string;
+  sectorKey: string;
+  active: number;
+  planned: number;
+  total: number;
+}
+
+interface SectorCoverageMatrix {
+  rows: Array<{
+    id: string;
+    name: string;
+    subLabel?: string | null;
+    countryName: string;
+  }>;
+  columns: Array<{ key: string; name: string }>;
+  cells: SectorCoverageCell[];
+  note: string | null;
+  truncated: boolean;
+  totalAreas: number;
+  totalSectors: number;
+}
+
+interface WatchlistRow {
+  areaId: string;
+  areaName: string;
+  areaType: string | null;
+  countryCode: string;
+  countryName: string;
+  activeCount: number;
+  plannedCount: number;
+  totalBudget: number;
+  totalBeneficiaries: number;
+  investmentPerBeneficiary: number | null;
+  reasons: string[];
+  completenessNote: string;
+  spatialVulnerabilityScore: number;
+  spatialVulnerabilityLabel: SpatialIndicatorLabel;
+}
+
+interface SpatialIndicatorRow {
+  areaId: string;
+  areaName: string;
+  areaType: string | null;
+  countryCode: string;
+  countryName: string;
+  score: number;
+  label: SpatialIndicatorLabel;
+  contributingFactors: string[];
+}
+
+interface SpatialDataQuality {
+  totalAdministrativeAreas: number;
+  administrativeAreasWithNoProjects: number;
+  administrativeAreasExcludedInactive: number;
+  projectsConsidered: number;
+  projectsMissingDistrict: number;
+  projectsMissingBudget: number;
+  projectsMissingBeneficiaries: number;
+  areasInvestmentPerBeneficiaryUncalculable: number;
+  areasWithNoActiveOrPlannedProjects: number;
+}
+
+interface SpatialVulnerability {
+  calculatedAt: string;
+  summary: SpatialSummary;
+  noRecordedActiveOrPlanned: NoCoverageRow[];
+  lowCoverageByArea: LowCoverageRow[];
+  investmentPerBeneficiaryByArea: IpbRow[];
+  sectorCoverageMatrix: SectorCoverageMatrix | null;
+  underservedWatchlist: WatchlistRow[];
+  spatialVulnerabilityIndicator: SpatialIndicatorRow[];
+  dataQuality: SpatialDataQuality;
+  notes: string[];
+  appliedFilters: Record<string, string | null>;
+  role: "SYSTEM_OWNER" | "PARTNER_ADMIN";
+}
+
 interface Country {
   code: string;
   name: string;
@@ -382,6 +534,42 @@ const FUNDING_CLIFF_WINDOWS = [
   { id: "24", label: "24 months" },
 ];
 const DEFAULT_FUNDING_CLIFF_WINDOW = "12";
+
+// Spatial-vulnerability palette. Mirrors RISK_TONE shape so the same
+// `RiskBadge`-style accessibility rules apply (colour + text always together).
+const SPATIAL_TONE: Record<
+  SpatialIndicatorLabel,
+  { bg: string; border: string; text: string; dot: string; short: string }
+> = {
+  "Lower recorded spatial vulnerability": {
+    bg: "bg-emerald-50",
+    border: "border-emerald-200",
+    text: "text-emerald-800",
+    dot: "bg-emerald-500",
+    short: "Lower",
+  },
+  "Moderate recorded spatial vulnerability": {
+    bg: "bg-amber-50",
+    border: "border-amber-200",
+    text: "text-amber-800",
+    dot: "bg-amber-500",
+    short: "Moderate",
+  },
+  "High recorded spatial vulnerability": {
+    bg: "bg-orange-50",
+    border: "border-orange-200",
+    text: "text-orange-800",
+    dot: "bg-orange-500",
+    short: "High",
+  },
+  "Severe recorded spatial vulnerability": {
+    bg: "bg-rose-50",
+    border: "border-rose-200",
+    text: "text-rose-800",
+    dot: "bg-rose-500",
+    short: "Severe",
+  },
+};
 
 // Risk-level palette. We also render a text label alongside, so this is
 // purely supplementary — never rely on colour alone to convey risk.
@@ -598,6 +786,9 @@ export default function ReportsPage() {
   const [cliffs, setCliffs] = useState<FundingCliffs | null>(null);
   const [cliffsLoading, setCliffsLoading] = useState(true);
   const [cliffsError, setCliffsError] = useState<string | null>(null);
+  const [spatial, setSpatial] = useState<SpatialVulnerability | null>(null);
+  const [spatialLoading, setSpatialLoading] = useState(true);
+  const [spatialError, setSpatialError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -706,6 +897,27 @@ export default function ReportsPage() {
     }
   }, [buildCliffQuery]);
 
+  const fetchSpatial = useCallback(async () => {
+    setSpatialLoading(true);
+    setSpatialError(null);
+    try {
+      const qs = buildQuery();
+      const res = await fetch(
+        `/api/reports/spatial-vulnerability${qs ? `?${qs}` : ""}`,
+      );
+      if (!res.ok)
+        throw new Error("Failed to load spatial vulnerability analytics");
+      const data = await res.json();
+      setSpatial(data);
+    } catch {
+      setSpatialError(
+        "Unable to load spatial vulnerability analytics. Please try again.",
+      );
+    } finally {
+      setSpatialLoading(false);
+    }
+  }, [buildQuery]);
+
   // Load reference data once.
   useEffect(() => {
     (async () => {
@@ -742,6 +954,10 @@ export default function ReportsPage() {
   useEffect(() => {
     fetchCliffs();
   }, [fetchCliffs]);
+
+  useEffect(() => {
+    fetchSpatial();
+  }, [fetchSpatial]);
 
   const hasFilters =
     countryCode !== "_all" ||
@@ -1819,20 +2035,44 @@ export default function ReportsPage() {
               />
             )}
 
-            {/* Widgets retained as placeholders for the next reporting phase. */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-2">
-              <PlaceholderCard
-                icon={<MapPin className="w-5 h-5" />}
-                title="No Active or Planned Intervention Districts"
-                description="Districts / Counties without any active or planned project."
-                dataDesignId="placeholder-no-intervention-districts"
-              />
-              <PlaceholderCard
-                icon={<Sprout className="w-5 h-5" />}
-                title="Low Investment Density Districts"
-                description="Districts / Counties with disproportionately low recorded investment per capita."
-                dataDesignId="placeholder-low-investment-density"
-              />
+            {/* -------------------------------------------------------- */}
+            {/* Spatial Vulnerability & Low Recorded Coverage            */}
+            {/* -------------------------------------------------------- */}
+            <div
+              data-design-id="reports-spatial-vulnerability"
+              aria-labelledby="reports-spatial-heading"
+              className="pt-4 space-y-4"
+            >
+              <div className="space-y-1">
+                <h3
+                  id="reports-spatial-heading"
+                  className="text-base font-semibold text-slate-900 flex items-center gap-2"
+                >
+                  <MapPin className="w-5 h-5 text-slate-500" />
+                  Spatial Vulnerability &amp; Low Recorded Coverage
+                </h3>
+                <p className="text-sm text-slate-600 max-w-3xl">
+                  This analysis identifies areas with low or no recorded
+                  project coverage within the Development Transparency Map. It
+                  does not prove that no development activity exists in those
+                  areas.
+                </p>
+              </div>
+
+              {spatialLoading && (
+                <LoadingState message="Loading spatial vulnerability analytics..." />
+              )}
+              {spatialError && (
+                <ErrorState message={spatialError} onRetry={fetchSpatial} />
+              )}
+
+              {!spatialLoading && !spatialError && spatial && (
+                <SpatialVulnerabilitySection
+                  spatial={spatial}
+                  countrySelected={countryCode !== "_all"}
+                  districtSelected={administrativeAreaId !== "_all"}
+                />
+              )}
             </div>
           </section>
 
@@ -1917,6 +2157,114 @@ export default function ReportsPage() {
                 </Table>
               </CardContent>
             </Card>
+
+            {/* ----------------------------------------------------------- */}
+            {/* Spatial data quality notes                                  */}
+            {/* ----------------------------------------------------------- */}
+            {!spatialLoading && !spatialError && spatial && (
+              <Card data-design-id="spatial-data-quality">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <MapPin className="w-5 h-5 text-slate-500" />
+                    Spatial Data Quality
+                  </CardTitle>
+                  <CardDescription>
+                    Data-completeness signals that affect the Spatial
+                    Vulnerability &amp; Low Recorded Coverage widgets above.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+                    <CliffDqCell
+                      label="Active admin areas in scope"
+                      value={formatNumber(
+                        spatial.dataQuality.totalAdministrativeAreas,
+                      )}
+                    />
+                    <CliffDqCell
+                      label="Admin areas with no linked projects"
+                      value={formatNumber(
+                        spatial.dataQuality.administrativeAreasWithNoProjects,
+                      )}
+                      warn={
+                        spatial.dataQuality.administrativeAreasWithNoProjects >
+                        0
+                      }
+                    />
+                    <CliffDqCell
+                      label="Admin areas excluded (inactive)"
+                      value={formatNumber(
+                        spatial.dataQuality
+                          .administrativeAreasExcludedInactive,
+                      )}
+                    />
+                    <CliffDqCell
+                      label="Projects considered"
+                      value={formatNumber(
+                        spatial.dataQuality.projectsConsidered,
+                      )}
+                    />
+                    <CliffDqCell
+                      label="Projects missing District / County"
+                      value={formatNumber(
+                        spatial.dataQuality.projectsMissingDistrict,
+                      )}
+                      warn={
+                        spatial.dataQuality.projectsMissingDistrict > 0
+                      }
+                    />
+                    <CliffDqCell
+                      label="Projects missing budget"
+                      value={formatNumber(
+                        spatial.dataQuality.projectsMissingBudget,
+                      )}
+                      warn={spatial.dataQuality.projectsMissingBudget > 0}
+                    />
+                    <CliffDqCell
+                      label="Projects missing beneficiaries"
+                      value={formatNumber(
+                        spatial.dataQuality.projectsMissingBeneficiaries,
+                      )}
+                      warn={
+                        spatial.dataQuality.projectsMissingBeneficiaries > 0
+                      }
+                    />
+                    <CliffDqCell
+                      label="Areas where IPB is not calculable"
+                      value={formatNumber(
+                        spatial.dataQuality
+                          .areasInvestmentPerBeneficiaryUncalculable,
+                      )}
+                      warn={
+                        spatial.dataQuality
+                          .areasInvestmentPerBeneficiaryUncalculable > 0
+                      }
+                    />
+                    <CliffDqCell
+                      label="Areas with no active/planned projects"
+                      value={formatNumber(
+                        spatial.dataQuality.areasWithNoActiveOrPlannedProjects,
+                      )}
+                      warn={
+                        spatial.dataQuality.areasWithNoActiveOrPlannedProjects >
+                        0
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2 pt-2">
+                    {spatial.notes.map((n) => (
+                      <div
+                        key={n}
+                        className="flex items-start gap-2 text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-md px-3 py-2"
+                      >
+                        <Info className="w-4 h-4 mt-0.5 text-slate-500 shrink-0" />
+                        <span>{n}</span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </section>
         </>
       )}
@@ -3045,6 +3393,826 @@ function CliffGroupTable({
           ))}
         </TableBody>
       </Table>
+    </div>
+  );
+}
+// ============================================================================
+// Spatial Vulnerability / Low-Coverage widgets
+// ============================================================================
+
+/**
+ * Badge for the Spatial Vulnerability Indicator score. Uses both colour and
+ * text so we never rely on colour alone to convey risk.
+ */
+function SpatialBadge({
+  label,
+  score,
+  size = "sm",
+}: {
+  label: SpatialIndicatorLabel;
+  score?: number;
+  size?: "xs" | "sm";
+}) {
+  const tone = SPATIAL_TONE[label];
+  const padding =
+    size === "xs" ? "px-1.5 py-0.5 text-[10px]" : "px-2 py-0.5 text-xs";
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full border font-medium ${padding} ${tone.bg} ${tone.text} ${tone.border}`}
+      aria-label={`Spatial vulnerability: ${label}${
+        score !== undefined ? ` (score ${score})` : ""
+      }`}
+      title={label}
+    >
+      <span
+        aria-hidden="true"
+        className={`inline-block w-1.5 h-1.5 rounded-full ${tone.dot}`}
+      />
+      {tone.short}
+      {score !== undefined && (
+        <span className="ml-1 tabular-nums text-slate-500">· {score}</span>
+      )}
+    </span>
+  );
+}
+
+/**
+ * Summary cards for the spatial-vulnerability block.
+ */
+function SpatialSummaryCards({ summary }: { summary: SpatialSummary }) {
+  const lowestIpb = summary.lowestInvestmentPerBeneficiary;
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+      <CliffSummaryCard
+        label="Active Admin Areas in Scope"
+        value={formatNumber(summary.totalAdministrativeAreas)}
+        sublabel="Universe from active District / County reference list"
+        icon={<Globe className="w-5 h-5" />}
+      />
+      <CliffSummaryCard
+        label="Areas with Active Projects"
+        value={formatNumber(summary.areasWithActiveProjects)}
+        sublabel={`${formatNumber(summary.areasWithAnyCoverage)} with active or planned`}
+        icon={<MapPin className="w-5 h-5 text-emerald-600" />}
+        accent="ok"
+      />
+      <CliffSummaryCard
+        label="Areas with Planned Projects"
+        value={formatNumber(summary.areasWithPlannedProjects)}
+        sublabel="Per Planned-intervention definition"
+        icon={<Sprout className="w-5 h-5 text-sky-600" />}
+      />
+      <CliffSummaryCard
+        label="No Recorded Active or Planned"
+        value={formatNumber(summary.areasWithNoActiveOrPlannedProjects)}
+        sublabel="Areas without current recorded coverage"
+        icon={<ShieldAlert className="w-5 h-5 text-rose-600" />}
+        accent={
+          summary.areasWithNoActiveOrPlannedProjects > 0 ? "danger" : "neutral"
+        }
+      />
+      <CliffSummaryCard
+        label="Recorded Geographic Coverage Ratio"
+        value={
+          summary.geographicCoverageRatio != null
+            ? formatPercent(summary.geographicCoverageRatio, 1)
+            : "—"
+        }
+        sublabel="Areas with any active/planned ÷ total"
+        icon={<Target className="w-5 h-5" />}
+      />
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardTitle className="text-sm font-medium text-slate-600">
+            Lowest Recorded Investment / Beneficiary
+          </CardTitle>
+          <div className="text-slate-500">
+            <DollarSign className="w-5 h-5" />
+          </div>
+        </CardHeader>
+        <CardContent>
+          {lowestIpb ? (
+            <>
+              <div className="text-2xl font-bold tabular-nums text-slate-900">
+                {formatCurrencyCompact(lowestIpb.investmentPerBeneficiary)}
+              </div>
+              <div className="text-xs text-slate-500 mt-1 truncate">
+                {lowestIpb.areaName}
+                {lowestIpb.areaType ? ` · ${lowestIpb.areaType}` : ""}
+                <span className="text-slate-400">
+                  {" "}
+                  · {lowestIpb.countryName}
+                </span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="text-2xl font-bold text-slate-500">
+                Insufficient data
+              </div>
+              <div className="text-xs text-slate-500 mt-1">
+                Requires budget and beneficiaries &gt; 0 at area level
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+/**
+ * Table of administrative areas that currently have no recorded active or
+ * planned interventions.
+ */
+function NoCoverageTable({
+  rows,
+  districtSelected,
+}: {
+  rows: NoCoverageRow[];
+  districtSelected: boolean;
+}) {
+  if (rows.length === 0) {
+    return (
+      <EmptyChart
+        message={
+          districtSelected
+            ? "The selected District / County has at least one active or planned recorded project."
+            : "Every active District / County in scope has at least one active or planned recorded project."
+        }
+      />
+    );
+  }
+  return (
+    <div className="overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Country</TableHead>
+            <TableHead>District / County</TableHead>
+            <TableHead>Admin Area Type</TableHead>
+            <TableHead className="text-right">Active Projects</TableHead>
+            <TableHead className="text-right">Planned Projects</TableHead>
+            <TableHead className="text-right">Completed Projects</TableHead>
+            <TableHead>Last Recorded Project End Date</TableHead>
+            <TableHead>Notes</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((r) => (
+            <TableRow key={r.areaId}>
+              <TableCell>{r.countryName}</TableCell>
+              <TableCell className="font-medium">{r.areaName}</TableCell>
+              <TableCell className="text-slate-600">
+                {r.areaType ?? "—"}
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
+                {formatNumber(r.activeCount)}
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
+                {formatNumber(r.plannedCount)}
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
+                {formatNumber(r.completedCount)}
+              </TableCell>
+              <TableCell>
+                {r.lastRecordedEndDate
+                  ? new Date(r.lastRecordedEndDate).toLocaleDateString()
+                  : "—"}
+              </TableCell>
+              <TableCell className="text-slate-600 text-xs max-w-[280px]">
+                {r.note}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
+/**
+ * Low-coverage-by-area ranked table + horizontal bar chart of active counts.
+ */
+function LowCoverageByArea({ rows }: { rows: LowCoverageRow[] }) {
+  if (rows.length === 0) {
+    return (
+      <EmptyChart message="No recorded projects under the current filters." />
+    );
+  }
+  const chartRows = rows.slice(0, 15);
+  return (
+    <div className="space-y-4">
+      <ResponsiveContainer
+        width="100%"
+        height={Math.max(260, chartRows.length * 30)}
+      >
+        <BarChart
+          data={chartRows.map((r) => ({
+            name: `${r.areaName}${r.countryName ? ` · ${r.countryName}` : ""}`,
+            active: r.activeCount,
+            planned: r.plannedCount,
+          }))}
+          layout="vertical"
+          margin={{ top: 5, right: 30, bottom: 5, left: 10 }}
+        >
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
+          <YAxis
+            type="category"
+            dataKey="name"
+            width={200}
+            tick={{ fontSize: 11 }}
+          />
+          <Tooltip />
+          <Legend />
+          <Bar
+            dataKey="active"
+            stackId="coverage"
+            name="Active"
+            fill="#059669"
+          />
+          <Bar
+            dataKey="planned"
+            stackId="coverage"
+            name="Planned"
+            fill="#0ea5e9"
+          />
+        </BarChart>
+      </ResponsiveContainer>
+
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Country</TableHead>
+              <TableHead>District / County</TableHead>
+              <TableHead className="text-right">Active</TableHead>
+              <TableHead className="text-right">Planned</TableHead>
+              <TableHead className="text-right">Recorded Budget</TableHead>
+              <TableHead className="text-right">Target Beneficiaries</TableHead>
+              <TableHead className="text-right">
+                Investment / Beneficiary
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((r) => (
+              <TableRow key={r.areaId}>
+                <TableCell>{r.countryName}</TableCell>
+                <TableCell className="font-medium max-w-[240px] truncate">
+                  {r.areaName}
+                  {r.areaType && (
+                    <span className="ml-1 text-[10px] text-slate-400">
+                      · {r.areaType}
+                    </span>
+                  )}
+                </TableCell>
+                <TableCell className="text-right tabular-nums">
+                  {formatNumber(r.activeCount)}
+                </TableCell>
+                <TableCell className="text-right tabular-nums">
+                  {formatNumber(r.plannedCount)}
+                </TableCell>
+                <TableCell className="text-right tabular-nums">
+                  {r.totalBudget > 0
+                    ? formatCurrencyFull(r.totalBudget)
+                    : "—"}
+                </TableCell>
+                <TableCell className="text-right tabular-nums">
+                  {r.totalBeneficiaries > 0
+                    ? formatNumber(r.totalBeneficiaries)
+                    : "—"}
+                </TableCell>
+                <TableCell className="text-right tabular-nums">
+                  {r.investmentPerBeneficiary != null
+                    ? formatCurrencyFull(r.investmentPerBeneficiary)
+                    : (
+                      <span className="text-slate-500">Insufficient data</span>
+                    )}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Investment-per-beneficiary chart — only rows where the ratio is calculable.
+ */
+function IpbByArea({ rows }: { rows: IpbRow[] }) {
+  if (rows.length === 0) {
+    return (
+      <EmptyChart message="Insufficient data: no areas have both recorded budget and target beneficiaries greater than zero." />
+    );
+  }
+  const top = rows.slice(0, 15);
+  return (
+    <div className="space-y-4">
+      <ResponsiveContainer
+        width="100%"
+        height={Math.max(260, top.length * 30)}
+      >
+        <BarChart
+          data={top.map((r) => ({
+            name: `${r.areaName} · ${r.countryName}`,
+            ipb: r.investmentPerBeneficiary,
+          }))}
+          layout="vertical"
+          margin={{ top: 5, right: 30, bottom: 5, left: 10 }}
+        >
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis
+            type="number"
+            tickFormatter={(v) => formatCurrencyCompact(v)}
+            tick={{ fontSize: 11 }}
+          />
+          <YAxis
+            type="category"
+            dataKey="name"
+            width={200}
+            tick={{ fontSize: 11 }}
+          />
+          <Tooltip
+            formatter={currencyTooltipFormatter("Investment / beneficiary")}
+          />
+          <Bar dataKey="ipb" fill="#8b5cf6" radius={[0, 4, 4, 0]} />
+        </BarChart>
+      </ResponsiveContainer>
+
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Country</TableHead>
+              <TableHead>District / County</TableHead>
+              <TableHead className="text-right">Active</TableHead>
+              <TableHead className="text-right">Planned</TableHead>
+              <TableHead className="text-right">Recorded Budget</TableHead>
+              <TableHead className="text-right">Target Beneficiaries</TableHead>
+              <TableHead className="text-right">
+                Investment / Beneficiary
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((r) => (
+              <TableRow key={r.areaId}>
+                <TableCell>{r.countryName}</TableCell>
+                <TableCell className="font-medium max-w-[240px] truncate">
+                  {r.areaName}
+                  {r.areaType && (
+                    <span className="ml-1 text-[10px] text-slate-400">
+                      · {r.areaType}
+                    </span>
+                  )}
+                </TableCell>
+                <TableCell className="text-right tabular-nums">
+                  {formatNumber(r.activeCount)}
+                </TableCell>
+                <TableCell className="text-right tabular-nums">
+                  {formatNumber(r.plannedCount)}
+                </TableCell>
+                <TableCell className="text-right tabular-nums">
+                  {formatCurrencyFull(r.totalBudget)}
+                </TableCell>
+                <TableCell className="text-right tabular-nums">
+                  {formatNumber(r.totalBeneficiaries)}
+                </TableCell>
+                <TableCell className="text-right tabular-nums font-medium">
+                  {formatCurrencyFull(r.investmentPerBeneficiary)}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Sector coverage matrix (area rows × sector columns). Each cell shows
+ * active+planned counts plus a text label tier (None / Low / Recorded) so
+ * the classification survives any colourblind or grayscale rendering.
+ */
+function SectorCoverageMatrixTable({
+  matrix,
+}: {
+  matrix: SectorCoverageMatrix;
+}) {
+  const lookup = new Map<string, SectorCoverageCell>();
+  for (const c of matrix.cells) {
+    lookup.set(`${c.areaId}::${c.sectorKey}`, c);
+  }
+  return (
+    <div className="overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="sticky left-0 bg-white z-10">
+              District / County
+            </TableHead>
+            {matrix.columns.map((c) => (
+              <TableHead
+                key={c.key}
+                className="text-center whitespace-nowrap"
+                title={c.name}
+              >
+                {c.name}
+              </TableHead>
+            ))}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {matrix.rows.map((r) => (
+            <TableRow key={r.id}>
+              <TableCell className="sticky left-0 bg-white z-10 font-medium max-w-[220px] truncate">
+                {r.name}
+                {r.subLabel && (
+                  <span className="ml-1 text-[10px] text-slate-400">
+                    · {r.subLabel}
+                  </span>
+                )}
+              </TableCell>
+              {matrix.columns.map((c) => {
+                const cell = lookup.get(`${r.id}::${c.key}`);
+                const total = cell?.total ?? 0;
+                let tier: "None" | "Low" | "Recorded" = "None";
+                let cls = "bg-slate-50 text-slate-500 border-slate-200";
+                if (total === 0) {
+                  tier = "None";
+                } else if (total <= 2) {
+                  tier = "Low";
+                  cls = "bg-amber-50 text-amber-800 border-amber-200";
+                } else {
+                  tier = "Recorded";
+                  cls = "bg-emerald-50 text-emerald-800 border-emerald-200";
+                }
+                return (
+                  <TableCell
+                    key={`${r.id}-${c.key}`}
+                    className="text-center tabular-nums"
+                  >
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${cls}`}
+                      title={`${total} recorded active/planned (${
+                        cell?.active ?? 0
+                      } active, ${cell?.planned ?? 0} planned)`}
+                      aria-label={`${c.name}: ${tier}, ${total} active or planned`}
+                    >
+                      <span className="tabular-nums">{total}</span>
+                      <span className="opacity-70">· {tier}</span>
+                    </span>
+                  </TableCell>
+                );
+              })}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
+/**
+ * Watchlist of potentially under-served areas. Reasons are surfaced as chips
+ * (not a black-box score) and the spatial-vulnerability indicator is shown
+ * alongside so reviewers can see both the score and its contributing rules.
+ */
+function UnderservedWatchlist({ rows }: { rows: WatchlistRow[] }) {
+  if (rows.length === 0) {
+    return (
+      <EmptyChart message="No areas currently meet any of the watchlist rules under the selected filters." />
+    );
+  }
+  return (
+    <div className="overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Country</TableHead>
+            <TableHead>District / County</TableHead>
+            <TableHead>Reason for Flag</TableHead>
+            <TableHead className="text-right">Active</TableHead>
+            <TableHead className="text-right">Planned</TableHead>
+            <TableHead className="text-right">Recorded Budget</TableHead>
+            <TableHead className="text-right">Target Beneficiaries</TableHead>
+            <TableHead className="text-right">
+              Investment / Beneficiary
+            </TableHead>
+            <TableHead>Data Completeness Note</TableHead>
+            <TableHead>Vulnerability Indicator</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((r) => (
+            <TableRow key={r.areaId}>
+              <TableCell>{r.countryName}</TableCell>
+              <TableCell className="font-medium max-w-[200px] truncate">
+                {r.areaName}
+                {r.areaType && (
+                  <span className="ml-1 text-[10px] text-slate-400">
+                    · {r.areaType}
+                  </span>
+                )}
+              </TableCell>
+              <TableCell className="max-w-[260px]">
+                <div className="flex flex-wrap gap-1">
+                  {r.reasons.map((reason) => (
+                    <span
+                      key={reason}
+                      className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] text-slate-700"
+                    >
+                      {reason}
+                    </span>
+                  ))}
+                </div>
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
+                {formatNumber(r.activeCount)}
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
+                {formatNumber(r.plannedCount)}
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
+                {r.totalBudget > 0 ? formatCurrencyFull(r.totalBudget) : "—"}
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
+                {r.totalBeneficiaries > 0
+                  ? formatNumber(r.totalBeneficiaries)
+                  : "—"}
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
+                {r.investmentPerBeneficiary != null
+                  ? formatCurrencyFull(r.investmentPerBeneficiary)
+                  : <span className="text-slate-500">Insufficient data</span>}
+              </TableCell>
+              <TableCell className="text-xs text-slate-600 max-w-[220px]">
+                {r.completenessNote}
+              </TableCell>
+              <TableCell>
+                <SpatialBadge
+                  label={r.spatialVulnerabilityLabel}
+                  score={r.spatialVulnerabilityScore}
+                />
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
+/**
+ * Spatial Vulnerability Indicator table — distilled from the watchlist to
+ * show just score + contributing factors. Labelled clearly as a ranking
+ * signal, not a definitive finding.
+ */
+function SpatialIndicatorTable({ rows }: { rows: SpatialIndicatorRow[] }) {
+  if (rows.length === 0) {
+    return (
+      <EmptyChart message="No areas flagged under the spatial vulnerability indicator for the current filters." />
+    );
+  }
+  return (
+    <div className="overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Country</TableHead>
+            <TableHead>District / County</TableHead>
+            <TableHead className="text-right">Score (0–100)</TableHead>
+            <TableHead>Classification</TableHead>
+            <TableHead>Contributing Factors</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((r) => (
+            <TableRow key={r.areaId}>
+              <TableCell>{r.countryName}</TableCell>
+              <TableCell className="font-medium max-w-[220px] truncate">
+                {r.areaName}
+                {r.areaType && (
+                  <span className="ml-1 text-[10px] text-slate-400">
+                    · {r.areaType}
+                  </span>
+                )}
+              </TableCell>
+              <TableCell className="text-right tabular-nums font-medium">
+                {r.score}
+              </TableCell>
+              <TableCell>
+                <SpatialBadge label={r.label} />
+              </TableCell>
+              <TableCell className="max-w-[360px]">
+                <div className="flex flex-wrap gap-1">
+                  {r.contributingFactors.map((f) => (
+                    <span
+                      key={f}
+                      className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] text-slate-700"
+                    >
+                      {f}
+                    </span>
+                  ))}
+                </div>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
+/**
+ * Main Spatial Vulnerability body, rendered once data loads. Organised as a
+ * stack of cards so each widget can individually empty-state.
+ */
+function SpatialVulnerabilitySection({
+  spatial,
+  countrySelected,
+  districtSelected,
+}: {
+  spatial: SpatialVulnerability;
+  countrySelected: boolean;
+  districtSelected: boolean;
+}) {
+  return (
+    <div className="space-y-6">
+      {/* 1. Summary cards */}
+      <SpatialSummaryCards summary={spatial.summary} />
+
+      <div className="flex items-start gap-2 text-xs text-slate-600 bg-sky-50 border border-sky-200 rounded-md px-3 py-2">
+        <Info className="w-4 h-4 mt-0.5 text-sky-600 shrink-0" />
+        <span>
+          This indicator is based only on records currently available in the
+          Development Transparency Map and should be interpreted as a
+          prioritisation signal, not a definitive finding.
+        </span>
+      </div>
+
+      {/* 2. No recorded active or planned */}
+      <Card data-design-id="spatial-no-coverage">
+        <CardHeader>
+          <CardTitle>
+            Districts / Counties with No Recorded Active or Planned Interventions
+          </CardTitle>
+          <CardDescription>
+            Active administrative areas from the reference list that have no
+            recorded active or planned project under the current filters. This
+            cross-references the District / County reference table against
+            project records, so zero-project areas are visible.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <NoCoverageTable
+            rows={spatial.noRecordedActiveOrPlanned}
+            districtSelected={districtSelected}
+          />
+        </CardContent>
+      </Card>
+
+      {/* 3. Low recorded coverage by area */}
+      <Card data-design-id="spatial-low-coverage">
+        <CardHeader>
+          <CardTitle>Low Recorded Coverage by District / County</CardTitle>
+          <CardDescription>
+            Active districts / counties ranked by fewest active projects first,
+            then by smallest recorded budget. Includes areas with zero
+            recorded projects.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <LowCoverageByArea rows={spatial.lowCoverageByArea} />
+        </CardContent>
+      </Card>
+
+      {/* 4. Investment per beneficiary */}
+      <Card data-design-id="spatial-ipb">
+        <CardHeader>
+          <CardTitle>
+            Investment per Beneficiary by District / County
+          </CardTitle>
+          <CardDescription>
+            Calculated only for areas where recorded budget and target
+            beneficiaries are both greater than zero. Areas where the ratio
+            cannot be calculated are shown as "Insufficient data", not zero.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <IpbByArea rows={spatial.investmentPerBeneficiaryByArea} />
+        </CardContent>
+      </Card>
+
+      {/* 5. Sector coverage matrix */}
+      <Card data-design-id="spatial-sector-coverage">
+        <CardHeader>
+          <CardTitle>Sector Coverage by District / County</CardTitle>
+          <CardDescription>
+            Matrix of active-or-planned project counts per District / County
+            (rows) and Sector (columns). Tier labels: "None" (0 recorded),
+            "Low" (1–2 recorded), "Recorded" (3+).
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {spatial.sectorCoverageMatrix ? (
+            <>
+              <SectorCoverageMatrixTable
+                matrix={spatial.sectorCoverageMatrix}
+              />
+              {spatial.sectorCoverageMatrix.note && (
+                <p className="text-xs text-slate-500 mt-2">
+                  {spatial.sectorCoverageMatrix.note}
+                </p>
+              )}
+            </>
+          ) : (
+            <EmptyChart
+              message={
+                countrySelected
+                  ? "No sector data found for the current filters."
+                  : "Select a country to view sector coverage by district / county."
+              }
+            />
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 6. Watchlist */}
+      <Card
+        data-design-id="spatial-underserved-watchlist"
+        className="border-amber-200"
+      >
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <ShieldAlert className="w-5 h-5 text-amber-600" />
+            Potentially Underserved Districts Watchlist
+          </CardTitle>
+          <CardDescription>
+            Areas flagged by one or more transparent rules: no recorded active
+            or planned projects, bottom quartile by active project count,
+            bottom quartile by recorded budget, or bottom quartile by
+            investment per beneficiary. Reasons are listed per row rather than
+            combined into a single opaque score.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <UnderservedWatchlist rows={spatial.underservedWatchlist} />
+        </CardContent>
+      </Card>
+
+      {/* 7. Spatial vulnerability indicator (optional — Part D) */}
+      <Card data-design-id="spatial-vulnerability-indicator">
+        <CardHeader>
+          <CardTitle>Spatial Vulnerability Indicator</CardTitle>
+          <CardDescription>
+            Transparent additive score (0–100) derived from: no active or
+            planned projects (+40), bottom quartile by active project count
+            (+20), bottom quartile by recorded budget (+20), bottom quartile
+            by investment per beneficiary (+10), majority of records missing
+            key data (+10). Use as a ranking signal only — not a definitive
+            finding.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <SpatialIndicatorTable rows={spatial.spatialVulnerabilityIndicator} />
+        </CardContent>
+      </Card>
+
+      {/* 8. Map view placeholder — kept explicit so the roadmap is visible. */}
+      <Card
+        aria-disabled="true"
+        data-design-id="spatial-map-placeholder"
+        className="border-dashed border-slate-300 bg-slate-50/60"
+      >
+        <CardHeader className="pb-2">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <MapPin className="w-5 h-5 text-slate-400 shrink-0" />
+              <CardTitle className="text-base text-slate-600 truncate">
+                District shading / heatmap
+              </CardTitle>
+            </div>
+            <Badge
+              variant="outline"
+              className="bg-white text-slate-500 border-slate-300 whitespace-nowrap"
+            >
+              <Lock className="w-3 h-3 mr-1" aria-hidden="true" />
+              Planned
+            </Badge>
+          </div>
+          <CardDescription className="text-slate-500">
+            District shading / heatmap planned for future phase pending
+            boundary data. No external boundary datasets are fetched in this
+            release.
+          </CardDescription>
+        </CardHeader>
+      </Card>
     </div>
   );
 }
