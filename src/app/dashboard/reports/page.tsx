@@ -480,6 +480,88 @@ interface SpatialDataQuality {
   projectsMissingBeneficiaries: number;
   areasInvestmentPerBeneficiaryUncalculable: number;
   areasWithNoActiveOrPlannedProjects: number;
+  // Population completeness (Part E).
+  areasWithPopulation: number;
+  areasMissingPopulation: number;
+  populationCompletenessPercent: number | null;
+  populationSourceCompletenessPercent: number | null;
+  populationYearMin: number | null;
+  populationYearMax: number | null;
+  populationYearSpread: number | null;
+  populationYearMixedNote: string | null;
+  missingPopulationByCountry: Array<{
+    countryCode: string;
+    countryName: string;
+    missingCount: number;
+    totalActive: number;
+    missingAreaNames: string[];
+  }>;
+}
+
+// Serialized PopulationWeightedResult (see src/lib/population-metrics.ts).
+interface PwrCell {
+  value: number | null;
+  label: string | null;
+  reason:
+    | "missing-population"
+    | "missing-budget"
+    | "missing-beneficiaries"
+    | "zero-population"
+    | null;
+}
+
+interface InvestmentPerCapitaRow {
+  areaId: string;
+  areaName: string;
+  areaType: string | null;
+  countryCode: string;
+  countryName: string;
+  estimatedPopulation: number | null;
+  populationYear: number | null;
+  totalBudget: number;
+  investmentPerCapita: PwrCell;
+}
+
+interface ProjectsPer100kRow {
+  areaId: string;
+  areaName: string;
+  areaType: string | null;
+  countryCode: string;
+  countryName: string;
+  estimatedPopulation: number | null;
+  populationYear: number | null;
+  activeOrPlannedCount: number;
+  projectsPer100k: PwrCell;
+}
+
+interface BeneficiaryReachRow {
+  areaId: string;
+  areaName: string;
+  areaType: string | null;
+  countryCode: string;
+  countryName: string;
+  estimatedPopulation: number | null;
+  populationYear: number | null;
+  totalBeneficiaries: number;
+  beneficiaryReachPercent: PwrCell;
+}
+
+interface HighPopulationLowCoverageRow {
+  areaId: string;
+  areaName: string;
+  areaType: string | null;
+  countryCode: string;
+  countryName: string;
+  estimatedPopulation: number | null;
+  populationYear: number | null;
+  activeCount: number;
+  plannedCount: number;
+  totalBudget: number;
+  investmentPerCapita: PwrCell;
+  projectsPer100k: PwrCell;
+  beneficiaryReachPercent: PwrCell;
+  reasons: string[];
+  dataCompletenessNote: string;
 }
 
 interface SpatialVulnerability {
@@ -491,6 +573,18 @@ interface SpatialVulnerability {
   sectorCoverageMatrix: SectorCoverageMatrix | null;
   underservedWatchlist: WatchlistRow[];
   spatialVulnerabilityIndicator: SpatialIndicatorRow[];
+  // Population-weighted tables (Part F).
+  investmentPerCapitaByArea: InvestmentPerCapitaRow[];
+  projectsPer100kByArea: ProjectsPer100kRow[];
+  beneficiaryReachByArea: BeneficiaryReachRow[];
+  beneficiaryReachHasOver100: boolean;
+  highPopulationLowCoverageWatchlist: HighPopulationLowCoverageRow[];
+  populationQuartiles: {
+    populationTopQuartile: number | null;
+    investmentPerCapitaBottomQuartile: number | null;
+    projectsPer100kBottomQuartile: number | null;
+    beneficiaryReachBottomQuartile: number | null;
+  };
   dataQuality: SpatialDataQuality;
   notes: string[];
   appliedFilters: Record<string, string | null>;
@@ -2561,6 +2655,150 @@ export default function ReportsPage() {
                       }
                     />
                   </div>
+
+                  {/* -------------------------------------------------- */}
+                  {/* Part E — Population Data Completeness              */}
+                  {/* -------------------------------------------------- */}
+                  <div
+                    data-design-id="spatial-population-data-quality"
+                    className="pt-4 mt-2 border-t border-slate-200 space-y-3"
+                  >
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                      <div>
+                        <h4 className="text-sm font-semibold text-slate-900">
+                          Population Data Completeness
+                        </h4>
+                        <p className="text-xs text-slate-500 max-w-2xl">
+                          Population-weighted metrics depend on estimated
+                          population values entered for each District /
+                          County. Missing or outdated population estimates
+                          may affect interpretation.
+                        </p>
+                      </div>
+                      {spatial.dataQuality.populationCompletenessPercent !==
+                        null && (
+                        <div className="text-right">
+                          <div className="text-2xl font-bold text-slate-900 tabular-nums">
+                            {formatPercent(
+                              spatial.dataQuality.populationCompletenessPercent,
+                              1,
+                            )}
+                          </div>
+                          <div className="text-xs text-slate-500">
+                            {formatNumber(
+                              spatial.dataQuality.areasWithPopulation,
+                            )}{" "}
+                            of{" "}
+                            {formatNumber(
+                              spatial.dataQuality.totalAdministrativeAreas,
+                            )}{" "}
+                            active areas have population data
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+                      <CliffDqCell
+                        label="Admin areas with population data"
+                        value={formatNumber(
+                          spatial.dataQuality.areasWithPopulation,
+                        )}
+                      />
+                      <CliffDqCell
+                        label="Admin areas missing population"
+                        value={formatNumber(
+                          spatial.dataQuality.areasMissingPopulation,
+                        )}
+                        warn={
+                          spatial.dataQuality.areasMissingPopulation > 0
+                        }
+                      />
+                      <CliffDqCell
+                        label="Population source completeness"
+                        value={
+                          spatial.dataQuality
+                            .populationSourceCompletenessPercent === null
+                            ? "—"
+                            : formatPercent(
+                                spatial.dataQuality
+                                  .populationSourceCompletenessPercent,
+                                1,
+                              )
+                        }
+                        warn={
+                          (spatial.dataQuality
+                            .populationSourceCompletenessPercent ?? 0) < 75
+                        }
+                      />
+                      <CliffDqCell
+                        label="Earliest population year"
+                        value={
+                          spatial.dataQuality.populationYearMin !== null
+                            ? String(spatial.dataQuality.populationYearMin)
+                            : "—"
+                        }
+                      />
+                      <CliffDqCell
+                        label="Latest population year"
+                        value={
+                          spatial.dataQuality.populationYearMax !== null
+                            ? String(spatial.dataQuality.populationYearMax)
+                            : "—"
+                        }
+                      />
+                      <CliffDqCell
+                        label="Year spread"
+                        value={
+                          spatial.dataQuality.populationYearSpread !== null
+                            ? `${spatial.dataQuality.populationYearSpread} yrs`
+                            : "—"
+                        }
+                        warn={
+                          (spatial.dataQuality.populationYearSpread ?? 0) >
+                          10
+                        }
+                      />
+                    </div>
+
+                    {spatial.dataQuality.missingPopulationByCountry.length >
+                      0 && (
+                      <div className="rounded-md border border-slate-200 bg-white">
+                        <div className="px-3 py-2 border-b border-slate-200 text-xs font-medium text-slate-600">
+                          Missing Population by Country
+                        </div>
+                        <div className="divide-y divide-slate-100">
+                          {spatial.dataQuality.missingPopulationByCountry.map(
+                            (e) => (
+                              <div
+                                key={e.countryCode}
+                                className="px-3 py-2 text-xs"
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="font-medium text-slate-800">
+                                    {e.countryName}
+                                  </span>
+                                  <span className="text-slate-600 tabular-nums">
+                                    {e.missingCount} of {e.totalActive}{" "}
+                                    missing
+                                  </span>
+                                </div>
+                                {e.missingAreaNames.length > 0 && (
+                                  <div className="text-slate-500 mt-0.5 truncate">
+                                    {e.missingAreaNames.slice(0, 6).join(", ")}
+                                    {e.missingCount > 6
+                                      ? `, +${e.missingCount - 6} more`
+                                      : ""}
+                                  </div>
+                                )}
+                              </div>
+                            ),
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="space-y-2 pt-2">
                     {spatial.notes.map((n) => (
                       <div
@@ -4283,6 +4521,323 @@ function UnderservedWatchlist({ rows }: { rows: WatchlistRow[] }) {
  * show just score + contributing factors. Labelled clearly as a ranking
  * signal, not a definitive finding.
  */
+// ---------------------------------------------------------------------------
+// Population-weighted tables (Prompt 7 · Part F).
+// ---------------------------------------------------------------------------
+
+/**
+ * Shared renderer for a PwrCell (value | "Population data missing" |
+ * "Insufficient budget data" | …). Keeps wording identical across every
+ * population-weighted table so the PRD language contract is enforced.
+ */
+function PwrValue({
+  cell,
+  format,
+}: {
+  cell: PwrCell;
+  format: (n: number) => string;
+}) {
+  if (cell.value !== null) {
+    return <span className="tabular-nums">{format(cell.value)}</span>;
+  }
+  return (
+    <span className="text-xs text-slate-500" title={cell.label ?? undefined}>
+      {cell.label ?? "Insufficient data"}
+    </span>
+  );
+}
+
+function PopulationCell({
+  pop,
+  year,
+}: {
+  pop: number | null;
+  year: number | null;
+}) {
+  if (pop === null || pop === undefined) {
+    return <span className="text-xs text-slate-500">Population data missing</span>;
+  }
+  return (
+    <span className="tabular-nums">
+      {formatNumber(pop)}
+      {year !== null && (
+        <span className="ml-1 text-[10px] text-slate-400">({year})</span>
+      )}
+    </span>
+  );
+}
+
+function InvestmentPerCapitaTable({
+  rows,
+}: {
+  rows: InvestmentPerCapitaRow[];
+}) {
+  if (rows.length === 0) {
+    return (
+      <EmptyChart message="No districts / counties in scope for per-capita analysis." />
+    );
+  }
+  return (
+    <div className="overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Country</TableHead>
+            <TableHead>District / County</TableHead>
+            <TableHead className="text-right">Estimated Population</TableHead>
+            <TableHead className="text-right">Recorded Budget</TableHead>
+            <TableHead className="text-right">
+              Recorded Investment per Capita
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((r) => (
+            <TableRow key={r.areaId}>
+              <TableCell>{r.countryName}</TableCell>
+              <TableCell className="font-medium max-w-[220px] truncate">
+                {r.areaName}
+                {r.areaType && (
+                  <span className="ml-1 text-[10px] text-slate-400">
+                    · {r.areaType}
+                  </span>
+                )}
+              </TableCell>
+              <TableCell className="text-right">
+                <PopulationCell
+                  pop={r.estimatedPopulation}
+                  year={r.populationYear}
+                />
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
+                {r.totalBudget > 0 ? (
+                  formatCurrencyCompact(r.totalBudget)
+                ) : (
+                  <span className="text-xs text-slate-500">
+                    Insufficient budget data
+                  </span>
+                )}
+              </TableCell>
+              <TableCell className="text-right">
+                <PwrValue cell={r.investmentPerCapita} format={formatCurrencyFull} />
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
+function ProjectsPer100kTable({ rows }: { rows: ProjectsPer100kRow[] }) {
+  if (rows.length === 0) {
+    return (
+      <EmptyChart message="No districts / counties in scope for projects-per-100k analysis." />
+    );
+  }
+  const fmt = (n: number) =>
+    n >= 100 ? formatNumber(Math.round(n)) : n.toFixed(2);
+  return (
+    <div className="overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Country</TableHead>
+            <TableHead>District / County</TableHead>
+            <TableHead className="text-right">Estimated Population</TableHead>
+            <TableHead className="text-right">Active + Planned</TableHead>
+            <TableHead className="text-right">Projects / 100k</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((r) => (
+            <TableRow key={r.areaId}>
+              <TableCell>{r.countryName}</TableCell>
+              <TableCell className="font-medium max-w-[220px] truncate">
+                {r.areaName}
+                {r.areaType && (
+                  <span className="ml-1 text-[10px] text-slate-400">
+                    · {r.areaType}
+                  </span>
+                )}
+              </TableCell>
+              <TableCell className="text-right">
+                <PopulationCell
+                  pop={r.estimatedPopulation}
+                  year={r.populationYear}
+                />
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
+                {formatNumber(r.activeOrPlannedCount)}
+              </TableCell>
+              <TableCell className="text-right">
+                <PwrValue cell={r.projectsPer100k} format={fmt} />
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
+function BeneficiaryReachTable({ rows }: { rows: BeneficiaryReachRow[] }) {
+  if (rows.length === 0) {
+    return (
+      <EmptyChart message="No districts / counties in scope for beneficiary reach analysis." />
+    );
+  }
+  const fmt = (n: number) => `${n.toFixed(1)}%`;
+  return (
+    <div className="overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Country</TableHead>
+            <TableHead>District / County</TableHead>
+            <TableHead className="text-right">Estimated Population</TableHead>
+            <TableHead className="text-right">Target Beneficiaries</TableHead>
+            <TableHead className="text-right">Reach %</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((r) => (
+            <TableRow key={r.areaId}>
+              <TableCell>{r.countryName}</TableCell>
+              <TableCell className="font-medium max-w-[220px] truncate">
+                {r.areaName}
+                {r.areaType && (
+                  <span className="ml-1 text-[10px] text-slate-400">
+                    · {r.areaType}
+                  </span>
+                )}
+              </TableCell>
+              <TableCell className="text-right">
+                <PopulationCell
+                  pop={r.estimatedPopulation}
+                  year={r.populationYear}
+                />
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
+                {r.totalBeneficiaries > 0 ? (
+                  formatNumber(r.totalBeneficiaries)
+                ) : (
+                  <span className="text-xs text-slate-500">
+                    Insufficient beneficiary data
+                  </span>
+                )}
+              </TableCell>
+              <TableCell className="text-right">
+                <PwrValue cell={r.beneficiaryReachPercent} format={fmt} />
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
+function HighPopulationLowCoverageWatchlistTable({
+  rows,
+}: {
+  rows: HighPopulationLowCoverageRow[];
+}) {
+  if (rows.length === 0) {
+    return (
+      <EmptyChart message="No districts / counties meet the high-population / low-recorded-coverage criteria under the current filters." />
+    );
+  }
+  return (
+    <div className="overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Country</TableHead>
+            <TableHead>District / County</TableHead>
+            <TableHead className="text-right">Estimated Population</TableHead>
+            <TableHead className="text-right">Active</TableHead>
+            <TableHead className="text-right">Planned</TableHead>
+            <TableHead className="text-right">Recorded Budget</TableHead>
+            <TableHead className="text-right">Investment / Capita</TableHead>
+            <TableHead className="text-right">Projects / 100k</TableHead>
+            <TableHead className="text-right">Reach %</TableHead>
+            <TableHead>Reason for Flag</TableHead>
+            <TableHead>Data Completeness</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((r) => (
+            <TableRow key={r.areaId}>
+              <TableCell>{r.countryName}</TableCell>
+              <TableCell className="font-medium max-w-[220px] truncate">
+                {r.areaName}
+                {r.areaType && (
+                  <span className="ml-1 text-[10px] text-slate-400">
+                    · {r.areaType}
+                  </span>
+                )}
+              </TableCell>
+              <TableCell className="text-right">
+                <PopulationCell
+                  pop={r.estimatedPopulation}
+                  year={r.populationYear}
+                />
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
+                {r.activeCount}
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
+                {r.plannedCount}
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
+                {r.totalBudget > 0
+                  ? formatCurrencyCompact(r.totalBudget)
+                  : "—"}
+              </TableCell>
+              <TableCell className="text-right">
+                <PwrValue
+                  cell={r.investmentPerCapita}
+                  format={formatCurrencyFull}
+                />
+              </TableCell>
+              <TableCell className="text-right">
+                <PwrValue
+                  cell={r.projectsPer100k}
+                  format={(n) =>
+                    n >= 100 ? formatNumber(Math.round(n)) : n.toFixed(2)
+                  }
+                />
+              </TableCell>
+              <TableCell className="text-right">
+                <PwrValue
+                  cell={r.beneficiaryReachPercent}
+                  format={(n) => `${n.toFixed(1)}%`}
+                />
+              </TableCell>
+              <TableCell className="max-w-[320px]">
+                <div className="flex flex-wrap gap-1">
+                  {r.reasons.map((reason) => (
+                    <span
+                      key={reason}
+                      className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] text-amber-800"
+                    >
+                      {reason}
+                    </span>
+                  ))}
+                </div>
+              </TableCell>
+              <TableCell className="max-w-[200px] text-xs text-slate-600">
+                {r.dataCompletenessNote}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
 function SpatialIndicatorTable({ rows }: { rows: SpatialIndicatorRow[] }) {
   if (rows.length === 0) {
     return (
@@ -4491,6 +5046,117 @@ function SpatialVulnerabilitySection({
         </CardHeader>
         <CardContent>
           <SpatialIndicatorTable rows={spatial.spatialVulnerabilityIndicator} />
+        </CardContent>
+      </Card>
+
+      {/* ------------------------------------------------------------------ */}
+      {/* Part F — Population-adjusted spatial metrics                       */}
+      {/* ------------------------------------------------------------------ */}
+      <div
+        data-design-id="spatial-population-adjusted"
+        className="pt-2 space-y-1"
+      >
+        <h4 className="text-sm font-semibold text-slate-900">
+          Population-adjusted metrics
+        </h4>
+        <div className="flex items-start gap-2 text-xs text-slate-600 bg-sky-50 border border-sky-200 rounded-md px-3 py-2">
+          <Info className="w-4 h-4 mt-0.5 text-sky-600 shrink-0" />
+          <span>
+            Population-adjusted metrics compare recorded project data
+            against estimated District / County population values entered
+            in the platform. They do not prove need, deprivation, or
+            underfunding on their own.
+          </span>
+        </div>
+      </div>
+
+      {/* F.1 — Recorded Investment per Capita */}
+      <Card data-design-id="spatial-investment-per-capita">
+        <CardHeader>
+          <CardTitle>Recorded Investment per Capita by District / County</CardTitle>
+          <CardDescription>
+            Recorded budget (active + planned, in USD) divided by the
+            estimated population for each area. Areas without an estimated
+            population show "Population data missing"; areas without a
+            recorded budget show "Insufficient budget data". Missing values
+            are never treated as zero for ranking.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <InvestmentPerCapitaTable
+            rows={spatial.investmentPerCapitaByArea}
+          />
+        </CardContent>
+      </Card>
+
+      {/* F.2 — Recorded Projects per 100,000 People */}
+      <Card data-design-id="spatial-projects-per-100k">
+        <CardHeader>
+          <CardTitle>Recorded Projects per 100,000 People</CardTitle>
+          <CardDescription>
+            Count of active + planned projects per 100,000 estimated
+            residents. Useful for comparing recorded project density across
+            large and small areas. Areas without an estimated population
+            show "Population data missing".
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ProjectsPer100kTable rows={spatial.projectsPer100kByArea} />
+        </CardContent>
+      </Card>
+
+      {/* F.3 — Recorded Beneficiary Reach as % of Estimated Population */}
+      <Card data-design-id="spatial-beneficiary-reach">
+        <CardHeader>
+          <CardTitle>
+            Recorded Beneficiary Reach as % of Estimated Population
+          </CardTitle>
+          <CardDescription>
+            Total target beneficiaries (active + planned) expressed as a
+            percentage of estimated population. Values above 100% may occur
+            where projects report repeated service contacts, overlapping
+            beneficiary groups, or broad programme targets.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <BeneficiaryReachTable rows={spatial.beneficiaryReachByArea} />
+          {spatial.beneficiaryReachHasOver100 && (
+            <div className="mt-3 flex items-start gap-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+              <Info className="w-4 h-4 mt-0.5 text-amber-600 shrink-0" />
+              <span>
+                Recorded beneficiary reach may exceed 100% where projects
+                report repeated service contacts, overlapping beneficiary
+                groups, or broad programme targets.
+              </span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* F.4 — High Population / Low Recorded Coverage Watchlist */}
+      <Card
+        data-design-id="spatial-high-pop-low-coverage-watchlist"
+        className="border-amber-200"
+      >
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <ShieldAlert className="w-5 h-5 text-amber-600" />
+            High Population / Low Recorded Coverage Watchlist
+          </CardTitle>
+          <CardDescription>
+            Districts / counties flagged by one or more transparent rules:
+            top-quartile population with no recorded active or planned
+            projects; top-quartile population with bottom-quartile
+            investment per capita or projects per 100,000; or recorded
+            population with bottom-quartile beneficiary reach. This list
+            complements the Potentially Underserved Districts Watchlist —
+            it does not replace it.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <HighPopulationLowCoverageWatchlistTable
+            rows={spatial.highPopulationLowCoverageWatchlist}
+          />
         </CardContent>
       </Card>
 

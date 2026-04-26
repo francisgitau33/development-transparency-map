@@ -179,6 +179,28 @@ model AdministrativeArea {
   countryCode String
   active      Boolean  @default(true)
   sortOrder   Int      @default(0)
+
+  // Optional population metadata, used for population-weighted reporting
+  // metrics (see src/lib/population-metrics.ts). All fields are OPTIONAL —
+  // missing values must never break reports; downstream calculations fall
+  // back to "Population data missing" / "Insufficient data" labels.
+  //
+  // - estimatedPopulation: must be POSITIVE if provided (> 0). Zero is
+  //   explicitly rejected by validation so we never divide by zero in the
+  //   per-capita widgets.
+  // - populationYear: reasonable calendar year if provided
+  //   (1900 ≤ y ≤ currentYear + 1 per validation).
+  // - populationSource: free text (e.g. "National Census 2019") — if
+  //   missing, reports show "Unsourced (completeness warning)".
+  // - populationSourceUrl: optional URL back to the source dataset.
+  // - populationNotes: free-form caveat (e.g. "projection", "includes
+  //   informal settlements", "excludes refugee camps").
+  estimatedPopulation Int?
+  populationYear      Int?
+  populationSource    String?
+  populationSourceUrl String?
+  populationNotes     String?
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

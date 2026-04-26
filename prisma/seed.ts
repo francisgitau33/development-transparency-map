@@ -193,32 +193,146 @@ async function main() {
   // Seed reference administrative areas. Covers at least two countries with
   // 3+ districts/counties each so dev flows (form dropdowns, filters, reports)
   // are exercised against real data.
-  const administrativeAreas = [
+  // Mock population figures below are approximate, clearly labelled as
+  // demonstration values, and must NOT be treated as official statistics.
+  // They are deliberately rounded to three significant figures so they
+  // clearly read as development mock data, not census-derived.
+  // A handful of areas intentionally omit population fields so the
+  // "Population data missing" code paths exercise real data.
+  const MOCK_POP_SOURCE = "Development Transparency Map mock data (non-official)";
+  const administrativeAreas: Array<{
+    countryCode: string;
+    name: string;
+    type: string;
+    sortOrder: number;
+    estimatedPopulation?: number;
+    populationYear?: number;
+    populationSource?: string;
+    populationSourceUrl?: string | null;
+    populationNotes?: string;
+  }> = [
     // Kenya — counties
-    { countryCode: "KE", name: "Nairobi County", type: "County", sortOrder: 1 },
-    { countryCode: "KE", name: "Kisumu County", type: "County", sortOrder: 2 },
-    { countryCode: "KE", name: "Mombasa County", type: "County", sortOrder: 3 },
-    { countryCode: "KE", name: "Turkana County", type: "County", sortOrder: 4 },
-    // Uganda — districts
-    { countryCode: "UG", name: "Kampala District", type: "District", sortOrder: 1 },
+    {
+      countryCode: "KE",
+      name: "Nairobi County",
+      type: "County",
+      sortOrder: 1,
+      estimatedPopulation: 4_400_000,
+      populationYear: 2019,
+      populationSource: MOCK_POP_SOURCE,
+      populationNotes: "Mock value for demonstration only.",
+    },
+    {
+      countryCode: "KE",
+      name: "Kisumu County",
+      type: "County",
+      sortOrder: 2,
+      estimatedPopulation: 1_160_000,
+      populationYear: 2019,
+      populationSource: MOCK_POP_SOURCE,
+      populationNotes: "Mock value for demonstration only.",
+    },
+    {
+      countryCode: "KE",
+      name: "Mombasa County",
+      type: "County",
+      sortOrder: 3,
+      estimatedPopulation: 1_210_000,
+      populationYear: 2019,
+      populationSource: MOCK_POP_SOURCE,
+      populationNotes: "Mock value for demonstration only.",
+    },
+    {
+      countryCode: "KE",
+      name: "Turkana County",
+      type: "County",
+      sortOrder: 4,
+      estimatedPopulation: 926_000,
+      populationYear: 2019,
+      populationSource: MOCK_POP_SOURCE,
+      populationNotes: "Mock value for demonstration only.",
+    },
+    // Uganda — districts. Kampala has a mock population; the other two
+    // are intentionally left blank so the "Population data missing"
+    // paths exercise real production-like data gaps.
+    {
+      countryCode: "UG",
+      name: "Kampala District",
+      type: "District",
+      sortOrder: 1,
+      estimatedPopulation: 1_680_000,
+      populationYear: 2020,
+      populationSource: MOCK_POP_SOURCE,
+      populationNotes: "Mock value for demonstration only.",
+    },
     { countryCode: "UG", name: "Gulu District", type: "District", sortOrder: 2 },
     { countryCode: "UG", name: "Mbarara District", type: "District", sortOrder: 3 },
     // Tanzania — regions
-    { countryCode: "TZ", name: "Dar es Salaam Region", type: "Region", sortOrder: 1 },
-    { countryCode: "TZ", name: "Arusha Region", type: "Region", sortOrder: 2 },
-    { countryCode: "TZ", name: "Mwanza Region", type: "Region", sortOrder: 3 },
+    {
+      countryCode: "TZ",
+      name: "Dar es Salaam Region",
+      type: "Region",
+      sortOrder: 1,
+      estimatedPopulation: 5_380_000,
+      populationYear: 2022,
+      populationSource: MOCK_POP_SOURCE,
+      populationNotes: "Mock value for demonstration only.",
+    },
+    {
+      countryCode: "TZ",
+      name: "Arusha Region",
+      type: "Region",
+      sortOrder: 2,
+      estimatedPopulation: 2_060_000,
+      populationYear: 2022,
+      populationSource: MOCK_POP_SOURCE,
+      populationNotes: "Mock value for demonstration only.",
+    },
+    {
+      countryCode: "TZ",
+      name: "Mwanza Region",
+      type: "Region",
+      sortOrder: 3,
+      estimatedPopulation: 3_700_000,
+      populationYear: 2022,
+      populationSource: MOCK_POP_SOURCE,
+      populationNotes: "Mock value for demonstration only.",
+    },
   ];
 
   for (const area of administrativeAreas) {
+    // IMPORTANT: we use `update: {}` so re-seeding never stomps over
+    // population fields an operator has maintained via the CMS.
+    const {
+      countryCode,
+      name,
+      type,
+      sortOrder,
+      estimatedPopulation,
+      populationYear,
+      populationSource,
+      populationSourceUrl,
+      populationNotes,
+    } = area;
     await prisma.administrativeArea.upsert({
       where: {
         countryCode_name: {
-          countryCode: area.countryCode,
-          name: area.name,
+          countryCode,
+          name,
         },
       },
       update: {},
-      create: area,
+      create: {
+        countryCode,
+        name,
+        type,
+        sortOrder,
+        estimatedPopulation: estimatedPopulation ?? null,
+        populationYear: populationYear ?? null,
+        populationSource: populationSource ?? null,
+        populationSourceUrl: populationSourceUrl ?? null,
+        populationNotes: populationNotes ?? null,
+      },
     });
   }
   console.log(`Seeded ${administrativeAreas.length} administrative areas`);

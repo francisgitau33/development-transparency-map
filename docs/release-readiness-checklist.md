@@ -164,6 +164,55 @@ marked **(audit)** are queryable from `/dashboard/audit`.
 
 ---
 
+## Population data (Prompt 7 · Part K)
+
+Administrative Areas (Districts / Counties / Regions) carry an optional
+block of population metadata that feeds the population-weighted
+reporting widgets in `/dashboard/reports`:
+
+- `estimatedPopulation` — positive whole number. Zero is **rejected** by
+  the validation layer so no report can ever divide by zero.
+- `populationYear` — calendar year, `1900 ≤ year ≤ currentYear + 1`.
+- `populationSource` — free-text label, e.g. "National Census 2019".
+- `populationSourceUrl` — optional URL back to the source dataset.
+- `populationNotes` — caveat, projection note, methodology flag, etc.
+
+Operational guidance:
+
+- **Population fields are optional but recommended.** A missing
+  `estimatedPopulation` does not break reports; affected areas are
+  surfaced as "Population data missing" and are excluded from ranking,
+  never coerced to zero.
+- **Record the year and source whenever possible.** These drive the
+  Population Data Completeness widget in the Data Quality section and
+  the "Data Completeness" column of the High Population / Low Recorded
+  Coverage Watchlist. Saving without year/source is allowed but shows
+  as incomplete in Data Quality.
+- **Review and refresh population estimates periodically.** Estimates
+  older than ~10 years auto-trigger a neutral "Population estimates are
+  drawn from different years…" note on the report. There is no
+  automated import from external census APIs and none is planned for
+  MVP.
+- **Population-adjusted metrics are only as reliable as the entered
+  data.** Every population-weighted widget links back to a persistent
+  interpretation note:
+  "Population-adjusted metrics compare recorded project data against
+  estimated District / County population values entered in the platform.
+  They do not prove need, deprivation, or underfunding on their own."
+- **Mock / seed population values must not be presented as official.**
+  The seed script labels mock values with the source string
+  `"Development Transparency Map mock data (non-official)"` and a
+  "Mock value for demonstration only." note. Do not copy seed values
+  into a production database and treat them as sourced statistics.
+
+Access control for these fields is identical to the rest of the
+Administrative Area record: **only SYSTEM_OWNER** may create / edit /
+deactivate, and the System Owner CMS form at
+`/dashboard/cms/administrative-areas` is the only UI surface that
+exposes write operations.
+
+---
+
 ## Next prompt candidates (out of scope here)
 
 These are tracked for awareness — they must not be started without
@@ -177,3 +226,8 @@ explicit approval.
   SendGrid, Postmark) and DKIM / SPF setup.
 - **Sector Concentration by District / County** widget — deferred per
   Prompt 5 scope.
+- **Population boundary data / polygon heatmaps** — out of scope for
+  Prompt 7. Population is recorded as a numeric estimate per admin
+  area only; no GeoJSON boundary datasets are fetched or stored.
+- **Automated population import** from external census APIs — out of
+  scope. Population data is entered manually through the CMS.

@@ -202,6 +202,143 @@ describe("GET /api/reports/spatial-vulnerability", () => {
     );
     expect(collectOrgIds(getProjectWhere())).toContain("org-partner");
   });
+
+  it("includes population-weighted response fields for SYSTEM_OWNER (Prompt 7 · Part F)", async () => {
+    mockGetSession.mockResolvedValue({
+      userId: "owner-1",
+      email: "o@example.com",
+      displayName: "O",
+    });
+    userFindUnique.mockResolvedValue({
+      id: "owner-1",
+      role: { role: "SYSTEM_OWNER", organizationId: null },
+    });
+    // Seed one active admin area with a known population + one active
+    // project, so downstream per-capita / per-100k calculations fire.
+    areaFindMany.mockResolvedValue([
+      {
+        id: "area-1",
+        name: "Kampala District",
+        type: "District",
+        countryCode: "UG",
+        active: true,
+        sortOrder: 1,
+        estimatedPopulation: 1_000_000,
+        populationYear: 2020,
+        populationSource: "Mock",
+        country: { code: "UG", name: "Uganda" },
+      },
+    ]);
+    projectFindMany.mockResolvedValue([
+      {
+        id: "p-1",
+        sectorKey: "HEALTH",
+        status: "ACTIVE",
+        budgetUsd: 500_000,
+        targetBeneficiaries: 50_000,
+        startDate: new Date(Date.UTC(2024, 0, 1)),
+        endDate: new Date(Date.UTC(2026, 11, 31)),
+        administrativeAreaId: "area-1",
+        donorId: null,
+        countryCode: "UG",
+      },
+    ]);
+    sectorFindMany.mockResolvedValue([]);
+    areaCount.mockResolvedValue(0);
+
+    const res = await spatialGet(
+      makeReq("https://app.example/api/reports/spatial-vulnerability"),
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+
+    // Shape assertions — new population response keys.
+    expect(body).toHaveProperty("investmentPerCapitaByArea");
+    expect(body).toHaveProperty("projectsPer100kByArea");
+    expect(body).toHaveProperty("beneficiaryReachByArea");
+    expect(body).toHaveProperty("beneficiaryReachHasOver100");
+    expect(body).toHaveProperty("highPopulationLowCoverageWatchlist");
+    expect(body).toHaveProperty("populationQuartiles");
+
+    // Data quality block carries population completeness metrics.
+    const dq = body.dataQuality as Record<string, unknown>;
+    expect(dq).toHaveProperty("areasWithPopulation");
+    expect(dq).toHaveProperty("areasMissingPopulation");
+    expect(dq).toHaveProperty("populationCompletenessPercent");
+    expect(dq).toHaveProperty("populationYearMin");
+    expect(dq).toHaveProperty("populationYearMax");
+    expect(dq).toHaveProperty("missingPopulationByCountry");
+
+    // Neutral interpretation notes must be present.
+    const notes = body.notes as string[];
+    expect(
+      notes.some((n) => /Population-adjusted metrics compare/i.test(n)),
+    ).toBe(true);
+    expect(
+      notes.some((n) =>
+        /Population-weighted metrics depend on estimated population/i.test(n),
+      ),
+    ).toBe(true);
+
+    // Investment per capita for the seeded row = 500_000 / 1_000_000 = 0.5.
+    const ipcRows = body.investmentPerCapitaByArea as Array<
+      Record<string, unknown>
+    >;
+    expect(ipcRows.length).toBe(1);
+    const ipcCell = ipcRows[0].investmentPerCapita as Record<string, unknown>;
+    expect(ipcCell.value).toBeCloseTo(0.5, 5);
+    expect(ipcCell.label).toBeNull();
+
+    // Population completeness for one populated area should be 100%.
+    expect(dq.areasWithPopulation).toBe(1);
+    expect(dq.areasMissingPopulation).toBe(0);
+    expect(dq.populationCompletenessPercent).toBe(100);
+  });
+
+  it("renders missing-population labels when the area has no population (Prompt 7 · Part F rules)", async () => {
+    mockGetSession.mockResolvedValue({
+      userId: "owner-1",
+      email: "o@example.com",
+      displayName: "O",
+    });
+    userFindUnique.mockResolvedValue({
+      id: "owner-1",
+      role: { role: "SYSTEM_OWNER", organizationId: null },
+    });
+    areaFindMany.mockResolvedValue([
+      {
+        id: "area-1",
+        name: "Gulu District",
+        type: "District",
+        countryCode: "UG",
+        active: true,
+        sortOrder: 2,
+        estimatedPopulation: null,
+        populationYear: null,
+        populationSource: null,
+        country: { code: "UG", name: "Uganda" },
+      },
+    ]);
+    projectFindMany.mockResolvedValue([]);
+    sectorFindMany.mockResolvedValue([]);
+    areaCount.mockResolvedValue(0);
+
+    const res = await spatialGet(
+      makeReq("https://app.example/api/reports/spatial-vulnerability"),
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    const ipcRows = body.investmentPerCapitaByArea as Array<
+      Record<string, unknown>
+    >;
+    const cell = ipcRows[0].investmentPerCapita as Record<string, unknown>;
+    expect(cell.value).toBeNull();
+    expect(cell.label).toBe("Population data missing");
+
+    const dq = body.dataQuality as Record<string, unknown>;
+    expect(dq.areasWithPopulation).toBe(0);
+    expect(dq.areasMissingPopulation).toBe(1);
+  });
 });
 
 // ---------------------------------------------------------------------------

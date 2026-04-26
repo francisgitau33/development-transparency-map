@@ -175,6 +175,86 @@ const ADMIN_AREA_TYPES = new Set([
   "OTHER",
 ]);
 
+/**
+ * Parse a user-supplied population integer. Accepts numbers or numeric
+ * strings, trims whitespace, and rejects zero / negative values.
+ *
+ * Returns:
+ *   { ok: true, value: number }   — integer ≥ 1
+ *   { ok: true, value: null }     — field was genuinely missing / empty
+ *   { ok: false, error: string }  — present but invalid (NaN, 0, negative…)
+ *
+ * This is a shared building block used by validateAdministrativeArea and
+ * the population-metrics helpers. Extracted so the rejection rule for
+ * "zero population" is identical everywhere.
+ */
+export function parseOptionalPopulation(
+  raw: unknown,
+): { ok: true; value: number | null } | { ok: false; error: string } {
+  if (raw === null || raw === undefined || raw === "") {
+    return { ok: true, value: null };
+  }
+  let n: number;
+  if (typeof raw === "number") {
+    n = raw;
+  } else if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (trimmed === "") return { ok: true, value: null };
+    n = Number(trimmed);
+  } else {
+    return { ok: false, error: "Estimated population must be a whole number" };
+  }
+  if (!Number.isFinite(n)) {
+    return { ok: false, error: "Estimated population must be a whole number" };
+  }
+  if (!Number.isInteger(n)) {
+    return { ok: false, error: "Estimated population must be a whole number" };
+  }
+  if (n <= 0) {
+    return {
+      ok: false,
+      error: "Estimated population must be greater than zero",
+    };
+  }
+  return { ok: true, value: n };
+}
+
+/**
+ * Parse a user-supplied population year. Accepts a number or numeric
+ * string; requires 1900 ≤ year ≤ currentYear + 1 so typos like 19988 or
+ * pre-1900 values are rejected without blocking legitimate projections
+ * one year into the future.
+ */
+export function parseOptionalPopulationYear(
+  raw: unknown,
+  now: Date = new Date(),
+): { ok: true; value: number | null } | { ok: false; error: string } {
+  if (raw === null || raw === undefined || raw === "") {
+    return { ok: true, value: null };
+  }
+  let n: number;
+  if (typeof raw === "number") {
+    n = raw;
+  } else if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (trimmed === "") return { ok: true, value: null };
+    n = Number(trimmed);
+  } else {
+    return { ok: false, error: "Population year must be a valid year" };
+  }
+  if (!Number.isFinite(n) || !Number.isInteger(n)) {
+    return { ok: false, error: "Population year must be a valid year" };
+  }
+  const maxYear = now.getUTCFullYear() + 1;
+  if (n < 1900 || n > maxYear) {
+    return {
+      ok: false,
+      error: `Population year must be between 1900 and ${maxYear}`,
+    };
+  }
+  return { ok: true, value: n };
+}
+
 export function validateAdministrativeArea(
   data: Record<string, unknown>,
 ): ValidationResult {
@@ -198,6 +278,53 @@ export function validateAdministrativeArea(
     }
   }
 
+  // --- Optional population fields ------------------------------------------
+  // All five fields are OPTIONAL for MVP. A missing estimatedPopulation is
+  // allowed (area saves successfully, but population-weighted reports will
+  // mark the row as "Population data missing"). If estimatedPopulation IS
+  // provided, it must be a positive whole number and — when year/source are
+  // supplied — those must also pass their own rules.
+  const populationParse = parseOptionalPopulation(data.estimatedPopulation);
+  let estimatedPopulation: number | null = null;
+  if (!populationParse.ok) {
+    errors.push(populationParse.error);
+  } else {
+    estimatedPopulation = populationParse.value;
+  }
+
+  const yearParse = parseOptionalPopulationYear(data.populationYear);
+  let populationYear: number | null = null;
+  if (!yearParse.ok) {
+    errors.push(yearParse.error);
+  } else {
+    populationYear = yearParse.value;
+  }
+
+  const populationSourceRaw = normalizeString(data.populationSource);
+  if (populationSourceRaw.length > 512) {
+    errors.push("Population source is too long (max 512 characters)");
+  }
+  const populationSource = populationSourceRaw || null;
+
+  const populationSourceUrlRaw = normalizeString(data.populationSourceUrl);
+  if (
+    populationSourceUrlRaw &&
+    populationSourceUrlRaw.length > 0 &&
+    !/^https?:\/\//i.test(populationSourceUrlRaw)
+  ) {
+    errors.push("Population source URL must start with http:// or https://");
+  }
+  if (populationSourceUrlRaw.length > 2048) {
+    errors.push("Population source URL is too long (max 2048 characters)");
+  }
+  const populationSourceUrl = populationSourceUrlRaw || null;
+
+  const populationNotesRaw = normalizeString(data.populationNotes);
+  if (populationNotesRaw.length > 2000) {
+    errors.push("Population notes are too long (max 2000 characters)");
+  }
+  const populationNotes = populationNotesRaw || null;
+
   return {
     valid: errors.length === 0,
     errors,
@@ -209,6 +336,11 @@ export function validateAdministrativeArea(
             type: rawType || null,
             active: data.active !== false,
             sortOrder: Number.parseInt(String(data.sortOrder)) || 0,
+            estimatedPopulation,
+            populationYear,
+            populationSource,
+            populationSourceUrl,
+            populationNotes,
           }
         : undefined,
   };
