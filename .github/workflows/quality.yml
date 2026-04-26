@@ -1,0 +1,81 @@
+name: MVP Quality Checks
+
+# Runs on every PR and on pushes to main. The existing CodeQL workflow
+# (.github/workflows/codeql.yml) is left untouched.
+#
+# Goal: catch type / lint / unit-test / build regressions before merge.
+#
+# We do NOT spin up a database for this workflow. The unit test suite mocks
+# Prisma; the `next build` step only needs the Prisma client generated (no
+# live connection) and a set of safe placeholder env vars for any code that
+# reads `process.env` at module-load time.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Typecheck · Lint · Tests · Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # Non-secret placeholders. Never use real secrets in CI — a local .env on
+    # a deployment host is the source of truth for real values (see
+    # docs/release-readiness-checklist.md).
+    env:
+      # Dummy URL — Prisma generate does not connect; `next build` only needs
+      # it to be set so url-parsing in @prisma/client does not crash.
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      # Strong placeholder. NODE_ENV is "test" so jwt-secret would still warn
+      # but not throw; we provide a real value anyway so nothing falls back.
+      JWT_SECRET: ci-placeholder-jwt-secret-please-rotate-in-prod
+      NODE_ENV: test
+      APP_URL: http://localhost:3000
+      # CAPTCHA placeholders so any module-level process.env reads resolve.
+      # Intentionally left blank so dev-mode code paths are exercised.
+      NEXT_PUBLIC_HCAPTCHA_SITE_KEY: ""
+      HCAPTCHA_SECRET: ""
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Cache Bun install
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.bun/install/cache
+            node_modules
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock', 'package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Prisma generate
+        run: bunx prisma generate
+
+      - name: Typecheck
+        run: bunx tsc --noEmit
+
+      - name: Lint
+        run: bunx biome lint ./src
+
+      - name: Unit tests
+        run: bunx vitest run --reporter=default
+
+      - name: Next build
+        run: BUILD_DIR=.next-build-ci bunx next build

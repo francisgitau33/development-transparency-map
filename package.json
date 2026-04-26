@@ -11,7 +11,10 @@
     "build": "prisma generate; BUILD_DIR=.next-build next build",
     "build:local": "BUILD_DIR=.next-build next build",
     "lint": "bunx biome lint --write && bunx tsc --noEmit",
-    "format": "bunx biome format --write"
+    "format": "bunx biome format --write",
+    "test": "bunx vitest run",
+    "test:watch": "bunx vitest",
+    "test:ci": "bunx vitest run --reporter=default"
   },
   "dependencies": {
     "@prisma/client": "5.22.0",
@@ -51,11 +54,13 @@
     "@types/node": "^20.17.50",
     "@types/react": "^18.3.22",
     "@types/react-dom": "^18.3.7",
+    "@vitest/coverage-v8": "^4.1.5",
     "eslint": "^9.27.0",
     "eslint-config-next": "15.1.7",
     "postcss": "^8.5.3",
     "tailwindcss": "^3.4.17",
     "tsx": "^4.21.0",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^4.1.5"
   }
 }

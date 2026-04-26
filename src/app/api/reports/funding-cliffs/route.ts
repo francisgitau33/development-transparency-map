@@ -55,6 +55,16 @@ import {
   buildProjectFilterWhere,
   parseProjectFilterParams,
 } from "@/lib/project-filters";
+import {
+  addMonths,
+  buildCliffRow,
+  classifyRisk as classify,
+  hasUsableBudget,
+  hasUsableDates,
+  isActive,
+  parseWindowMonths,
+  type RiskLevel,
+} from "@/lib/funding-cliff";
 
 // -----------------------------------------------------------------------------
 // Constants
@@ -65,9 +75,6 @@ const TOP_ALERT_LIMIT = 20;
 const PROJECTS_ENDING_SOON_LIMIT = 50;
 const UNKNOWN_DONOR = "Unknown / Not Provided";
 const UNKNOWN_DISTRICT = "Unknown / Not Provided";
-
-const SUPPORTED_WINDOWS = new Set([6, 12, 18, 24]);
-const DEFAULT_WINDOW = 12;
 
 // 4 six-month buckets covering 0 → 24 months ahead.
 const TIMELINE_BUCKETS = [
@@ -99,8 +106,6 @@ interface ProjectForCliff {
   donor: { id: string; name: string } | null;
 }
 
-type RiskLevel = "Low" | "Moderate" | "High" | "Severe" | "Insufficient data";
-
 interface CliffRow {
   key: string;
   name: string;
@@ -119,97 +124,17 @@ interface CliffRow {
 // -----------------------------------------------------------------------------
 // Helpers
 // -----------------------------------------------------------------------------
-
-function parseWindowMonths(raw: string | null): number {
-  if (!raw) return DEFAULT_WINDOW;
-  const n = Number.parseInt(raw, 10);
-  if (!Number.isFinite(n)) return DEFAULT_WINDOW;
-  return SUPPORTED_WINDOWS.has(n) ? n : DEFAULT_WINDOW;
-}
-
-function addMonths(date: Date, months: number): Date {
-  const d = new Date(date.getTime());
-  d.setUTCMonth(d.getUTCMonth() + months);
-  return d;
-}
-
-/**
- * Classify a cliff percentage into a risk band.
- *
- * Deliberately conservative: where the percentage is null (typically
- * because activeBudget is zero or unavailable), we return
- * "Insufficient data" rather than defaulting to Low. This stops the UI
- * from implying a confident "safe" answer when we have no basis for one.
- */
-function classify(cliffRiskPercent: number | null): RiskLevel {
-  if (cliffRiskPercent === null || !Number.isFinite(cliffRiskPercent)) {
-    return "Insufficient data";
-  }
-  if (cliffRiskPercent <= 25) return "Low";
-  if (cliffRiskPercent <= 50) return "Moderate";
-  if (cliffRiskPercent <= 75) return "High";
-  return "Severe";
-}
-
-/**
- * An "active" project, for cliff purposes, is one that is currently running:
- *
- *   status === ACTIVE
- *   OR
- *   (startDate ≤ today AND endDate ≥ today)
- *
- * Completed projects are always excluded. Prefer the explicit status when
- * it is set to a terminal value (COMPLETED) over the date window.
- */
-function isActive(p: ProjectForCliff, today: Date): boolean {
-  if (p.status === "COMPLETED") return false;
-  if (p.status === "ACTIVE") return true;
-  if (p.startDate && p.endDate) {
-    return p.startDate.getTime() <= today.getTime() &&
-      p.endDate.getTime() >= today.getTime();
-  }
-  return false;
-}
-
-function hasUsableDates(p: ProjectForCliff): boolean {
-  if (!p.startDate || !p.endDate) return false;
-  return p.endDate.getTime() >= p.startDate.getTime();
-}
-
-function hasUsableBudget(p: ProjectForCliff): boolean {
-  return p.budgetUsd !== null && Number.isFinite(p.budgetUsd) && p.budgetUsd > 0;
-}
-
-function buildCliffRow(params: {
-  key: string;
-  name: string;
-  subLabel?: string | null;
-  activeBudget: number;
-  expiringBudget: number;
-  plannedReplacementBudget: number;
-  activeProjectCount: number;
-  expiringProjectCount: number;
-}): CliffRow {
-  const netExposure = Math.max(
-    params.expiringBudget - params.plannedReplacementBudget,
-    0,
-  );
-  const cliffRiskPercent =
-    params.activeBudget > 0 ? (netExposure / params.activeBudget) * 100 : null;
-  return {
-    key: params.key,
-    name: params.name,
-    subLabel: params.subLabel ?? null,
-    activeBudget: params.activeBudget,
-    expiringBudget: params.expiringBudget,
-    plannedReplacementBudget: params.plannedReplacementBudget,
-    netExposure,
-    cliffRiskPercent,
-    riskLevel: classify(cliffRiskPercent),
-    activeProjectCount: params.activeProjectCount,
-    expiringProjectCount: params.expiringProjectCount,
-  };
-}
+// Pure risk / window / project helpers live in src/lib/funding-cliff.ts and
+// are imported above. Keep route-local helpers here only if they perform I/O
+// or need types from this file.
+//
+// Note: the imported `isActive`, `hasUsableBudget`, `hasUsableDates` take a
+// structurally-typed `ProjectForCliff` (status + dates + budget); the local
+// `ProjectForCliff` declared above is a superset, so TypeScript accepts it.
+//
+// `buildCliffRow` returns an object whose shape is assignment-compatible
+// with the local `CliffRow` interface (subLabel, netExposure, cliffRiskPercent,
+// riskLevel, and the pass-through counts).
 
 // -----------------------------------------------------------------------------
 // Route handler
