@@ -17,6 +17,14 @@
 /.next/
 /out/
 
+# custom next build output directories (BUILD_DIR=.next-build-*)
+/.next-build*/
+/.next-build-audit/
+/.next-build-test/
+/.next-build-ci/
+/.next-build-release-audit/
+/.next-build-final-check/
+
 # production
 /build
 
