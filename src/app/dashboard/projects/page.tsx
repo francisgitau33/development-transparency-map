@@ -26,6 +26,7 @@ interface Project {
   countryCode: string;
   sectorKey: string;
   status: string;
+  visibility: string;
   startDate: string;
   endDate: string | null;
   budgetUsd: number | null;
@@ -77,6 +78,7 @@ export default function ProjectsPage() {
     countryCode: "",
     sectorKey: "",
     status: "PLANNED",
+    visibility: "PENDING_REVIEW",
     startDate: "",
     endDate: "",
     budgetUsd: "",
@@ -129,6 +131,7 @@ export default function ProjectsPage() {
       countryCode: "",
       sectorKey: "",
       status: "PLANNED",
+      visibility: isSystemOwner ? "PUBLISHED" : "PENDING_REVIEW",
       startDate: "",
       endDate: "",
       budgetUsd: "",
@@ -150,6 +153,7 @@ export default function ProjectsPage() {
         countryCode: project.countryCode,
         sectorKey: project.sectorKey,
         status: project.status,
+        visibility: project.visibility || "PENDING_REVIEW",
         startDate: project.startDate.split("T")[0],
         endDate: project.endDate ? project.endDate.split("T")[0] : "",
         budgetUsd: project.budgetUsd?.toString() || "",
@@ -177,10 +181,10 @@ export default function ProjectsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...formData,
-          budgetUsd: formData.budgetUsd ? parseFloat(formData.budgetUsd) : null,
-          targetBeneficiaries: formData.targetBeneficiaries ? parseInt(formData.targetBeneficiaries) : null,
-          latitude: parseFloat(formData.latitude),
-          longitude: parseFloat(formData.longitude),
+          budgetUsd: formData.budgetUsd ? Number.parseFloat(formData.budgetUsd) : null,
+          targetBeneficiaries: formData.targetBeneficiaries ? Number.parseInt(formData.targetBeneficiaries) : null,
+          latitude: Number.parseFloat(formData.latitude),
+          longitude: Number.parseFloat(formData.longitude),
         }),
       });
 
@@ -301,6 +305,7 @@ export default function ProjectsPage() {
                   <TableHead>Location</TableHead>
                   <TableHead>Sector</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Visibility</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -342,6 +347,23 @@ export default function ProjectsPage() {
                         }
                       >
                         {project.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant="outline"
+                        data-design-id={`project-visibility-${project.id}`}
+                        className={
+                          project.visibility === "PUBLISHED"
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            : project.visibility === "PENDING_REVIEW"
+                            ? "bg-amber-50 text-amber-700 border-amber-200"
+                            : project.visibility === "UNPUBLISHED"
+                            ? "bg-rose-50 text-rose-700 border-rose-200"
+                            : "bg-slate-50 text-slate-700 border-slate-200"
+                        }
+                      >
+                        {project.visibility?.replace("_", " ") || "PENDING REVIEW"}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
@@ -495,6 +517,35 @@ export default function ProjectsPage() {
                       <SelectItem value="COMPLETED">Completed</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+
+                <div className="grid gap-2" data-design-id="project-visibility-field">
+                  <Label htmlFor="visibility">Visibility</Label>
+                  <Select
+                    value={formData.visibility}
+                    onValueChange={(value) =>
+                      setFormData({ ...formData, visibility: value })
+                    }
+                  >
+                    <SelectTrigger id="visibility">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="DRAFT">Draft</SelectItem>
+                      <SelectItem value="PENDING_REVIEW">Pending review</SelectItem>
+                      {isSystemOwner && (
+                        <SelectItem value="PUBLISHED">Published</SelectItem>
+                      )}
+                      {isSystemOwner && (
+                        <SelectItem value="UNPUBLISHED">Unpublished</SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-slate-500">
+                    {isSystemOwner
+                      ? "Only Published projects appear on the public map."
+                      : "Partner Admins submit at Draft or Pending review. A System Owner will publish."}
+                  </p>
                 </div>
 
                 <div className="grid gap-2">

@@ -86,7 +86,7 @@ export default function ReportsPage() {
   const formatCurrency = (value: number) => {
     if (value >= 1000000) {
       return `$${(value / 1000000).toFixed(1)}M`;
-    } else if (value >= 1000) {
+    }if (value >= 1000) {
       return `$${(value / 1000).toFixed(1)}K`;
     }
     return `$${value.toFixed(0)}`;
@@ -199,7 +199,7 @@ export default function ReportsPage() {
                         cy="50%"
                         outerRadius={100}
                         label={({ name, percent }) =>
-                          `${name} (${(percent * 100).toFixed(0)}%)`
+                          `${name} (${((percent ?? 0) * 100).toFixed(0)}%)`
                         }
                       >
                         {analytics.projectsBySector.map((entry, index) => (

@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
+import { AUDIT_ACTIONS, logAudit } from "@/lib/audit";
 
 export async function GET() {
   try {
@@ -96,6 +97,18 @@ export async function PUT(request: NextRequest) {
         },
       });
     }
+
+    await logAudit({
+      actorId: session.userId,
+      actorEmail: user.email,
+      action: AUDIT_ACTIONS.CMS_UPDATED,
+      entityType: "CmsAbout",
+      entityId: content.id,
+      payload: {
+        title: content.title,
+        sections: Array.isArray(bodySections) ? bodySections.length : 0,
+      },
+    });
 
     return NextResponse.json({
       content: {

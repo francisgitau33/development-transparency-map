@@ -1,7 +1,33 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, Prisma } from "@prisma/client";
 import bcrypt from "bcrypt";
 
 const prisma = new PrismaClient();
+
+async function recordSeedAudit(
+  action: string,
+  actorId: string | null,
+  actorEmail: string | null,
+  entityType: string | null,
+  entityId: string | null,
+  payload: Record<string, unknown> | null,
+) {
+  try {
+    await prisma.auditEvent.create({
+      data: {
+        actorId,
+        actorEmail,
+        action,
+        entityType,
+        entityId,
+        payload: payload
+          ? (payload as unknown as Prisma.InputJsonValue)
+          : Prisma.JsonNull,
+      },
+    });
+  } catch (err) {
+    console.error("[seed:audit]", action, err);
+  }
+}
 
 /**
  * SYSTEM_OWNER SEEDING
@@ -36,6 +62,14 @@ async function seedSystemOwner() {
     // User exists - check if role exists
     if (existingUser.role) {
       console.log(`✓ SYSTEM_OWNER already exists with role: ${existingUser.role.role}`);
+      await recordSeedAudit(
+        "SYSTEM_OWNER_SEED_VERIFIED",
+        existingUser.id,
+        existingUser.email,
+        "User",
+        existingUser.id,
+        { outcome: "already_exists", role: existingUser.role.role },
+      );
       return;
     }
 
@@ -50,6 +84,14 @@ async function seedSystemOwner() {
       },
     });
     console.log(`✓ SYSTEM_OWNER role added to existing user`);
+    await recordSeedAudit(
+      "SYSTEM_OWNER_SEED_VERIFIED",
+      existingUser.id,
+      existingUser.email,
+      "User",
+      existingUser.id,
+      { outcome: "role_added" },
+    );
     return;
   }
 
@@ -75,6 +117,15 @@ async function seedSystemOwner() {
 
   console.log(`✓ SYSTEM_OWNER created: ${systemOwnerEmail}`);
   console.log(`  IMPORTANT: Change this password after first login!`);
+
+  await recordSeedAudit(
+    "SYSTEM_OWNER_SEED_VERIFIED",
+    user.id,
+    user.email,
+    "User",
+    user.id,
+    { outcome: "created" },
+  );
 }
 
 async function main() {

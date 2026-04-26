@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { validateSector } from "@/lib/validation";
@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
     }
 
     const existing = await prisma.referenceSector.findUnique({
-      where: { key: validation.normalizedData!.key as string },
+      where: { key: validation.normalizedData?.key as string },
     });
 
     if (existing) {

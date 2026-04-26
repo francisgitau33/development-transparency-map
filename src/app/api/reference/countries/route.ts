@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { validateCountry } from "@/lib/validation";
@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
     }
 
     const existing = await prisma.referenceCountry.findUnique({
-      where: { code: validation.normalizedData!.code as string },
+      where: { code: validation.normalizedData?.code as string },
     });
 
     if (existing) {

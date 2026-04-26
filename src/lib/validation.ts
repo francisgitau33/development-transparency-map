@@ -33,15 +33,15 @@ export function normalizeRole(value: unknown): string {
 export function normalizeDate(value: unknown): string | null {
   if (!value) return null;
   const date = new Date(value as string);
-  if (isNaN(date.getTime())) return null;
+  if (Number.isNaN(date.getTime())) return null;
   return date.toISOString().split("T")[0];
 }
 
 export function normalizeCoordinate(value: unknown, precision = 6): number | null {
   if (value === null || value === undefined || value === "") return null;
-  const num = parseFloat(String(value));
-  if (isNaN(num)) return null;
-  return Math.round(num * Math.pow(10, precision)) / Math.pow(10, precision);
+  const num = Number.parseFloat(String(value));
+  if (Number.isNaN(num)) return null;
+  return Math.round(num * 10 ** precision) / 10 ** precision;
 }
 
 export function validateProject(data: Record<string, unknown>): ValidationResult {
@@ -91,8 +91,8 @@ export function validateProject(data: Record<string, unknown>): ValidationResult
           startDate,
           status,
           endDate: normalizeDate(data.endDate),
-          budgetUsd: data.budgetUsd ? parseFloat(String(data.budgetUsd)) : null,
-          targetBeneficiaries: data.targetBeneficiaries ? parseInt(String(data.targetBeneficiaries)) : null,
+          budgetUsd: data.budgetUsd ? Number.parseFloat(String(data.budgetUsd)) : null,
+          targetBeneficiaries: data.targetBeneficiaries ? Number.parseInt(String(data.targetBeneficiaries)) : null,
           adminArea1: normalizeString(data.adminArea1) || null,
           adminArea2: normalizeString(data.adminArea2) || null,
           locationName: normalizeString(data.locationName) || null,
@@ -125,7 +125,7 @@ export function validateCountry(data: Record<string, unknown>): ValidationResult
           name,
           type,
           active: data.active !== false,
-          sortOrder: parseInt(String(data.sortOrder)) || 0,
+          sortOrder: Number.parseInt(String(data.sortOrder)) || 0,
         }
       : undefined,
   };
@@ -154,7 +154,7 @@ export function validateSector(data: Record<string, unknown>): ValidationResult 
           icon,
           color,
           active: data.active !== false,
-          sortOrder: parseInt(String(data.sortOrder)) || 0,
+          sortOrder: Number.parseInt(String(data.sortOrder)) || 0,
         }
       : undefined,
   };

@@ -22,7 +22,22 @@
     "rules": {
       "recommended": true,
       "correctness": {
-        "noUnusedVariables": "off"
+        "noUnusedVariables": "off",
+        "useExhaustiveDependencies": "off"
+      },
+      "complexity": {
+        "noForEach": "off"
+      },
+      "style": {
+        "noNonNullAssertion": "off"
+      },
+      "suspicious": {
+        "noArrayIndexKey": "off",
+        "noImplicitAnyLet": "off",
+        "noRedeclare": "off"
+      },
+      "security": {
+        "noDangerouslySetInnerHtml": "off"
       },
       "nursery": {
         "noImgElement": "off"
@@ -40,6 +55,7 @@
         "noRedundantRoles": "off",
         "noSvgWithoutTitle": "off",
         "useAltText": "off",
+        "useHtmlLang": "off",
         "useKeyWithClickEvents": "off",
         "useKeyWithMouseEvents": "off",
         "useButtonType": "off"

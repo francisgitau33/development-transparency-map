@@ -98,8 +98,19 @@ enum ProjectStatus {
   COMPLETED
 }
 
+// Project public-map visibility / approval state
+// Only PUBLISHED projects are shown on the public map.
+// Partner Admins can create/edit at DRAFT or PENDING_REVIEW.
+// Only System Owners can set PUBLISHED or UNPUBLISHED.
+enum ProjectVisibility {
+  DRAFT
+  PENDING_REVIEW
+  PUBLISHED
+  UNPUBLISHED
+}
+
 model Project {
-  id                 String        @id @default(cuid())
+  id                 String            @id @default(cuid())
   title              String
   description        String
   organizationId     String
@@ -108,21 +119,24 @@ model Project {
   adminArea2         String?
   sectorKey          String
   status             ProjectStatus
+  visibility         ProjectVisibility @default(PENDING_REVIEW)
   startDate          DateTime
   endDate            DateTime?
   budgetUsd          Float?
-  targetBeneficiaries Int?         // Number of people the project aims to reach/serve
+  targetBeneficiaries Int?             // Number of people the project aims to reach/serve
   latitude           Float
   longitude          Float
   locationName       String?
   dataSource         String?
   contactEmail       String?
   createdByUserId    String
-  createdAt          DateTime      @default(now())
-  updatedAt          DateTime      @updatedAt
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id])
   createdBy    User         @relation("CreatedBy", fields: [createdByUserId], references: [id])
+
+  @@index([visibility])
 }
 
 // Reference countries
@@ -200,4 +214,23 @@ model PasswordResetToken {
 
   @@index([email])
   @@index([expiresAt])
+}
+
+// Audit log for administrative / security-relevant events.
+// Writes are best-effort: audit failures must not break the primary transaction
+// (see src/lib/audit.ts).
+model AuditEvent {
+  id         String   @id @default(cuid())
+  actorId    String?  // User.id of actor, nullable for system-originated events
+  actorEmail String?  // snapshot of actor email for retention beyond user deletion
+  action     String   // e.g. USER_APPROVED, PROJECT_CREATED, CMS_UPDATED
+  entityType String?  // e.g. User, Project, Organization, CmsAbout
+  entityId   String?  // id of the affected entity
+  payload    Json?    // structured context (diff, params, counts, …)
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([actorId])
+  @@index([action])
+  @@index([entityType, entityId])
 }

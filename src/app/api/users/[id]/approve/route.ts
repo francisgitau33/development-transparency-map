@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
+import { AUDIT_ACTIONS, logAudit } from "@/lib/audit";
 
 export async function POST(
   request: NextRequest,
@@ -80,6 +81,30 @@ export async function POST(
           data: { status: "APPROVED" },
         });
       }
+
+      await logAudit(
+        {
+          actorId: session.userId,
+          actorEmail: currentUser?.email,
+          action: AUDIT_ACTIONS.USER_APPROVED,
+          entityType: "User",
+          entityId: userId,
+          payload: { role, organizationId: organizationId ?? null },
+        },
+        tx,
+      );
+
+      await logAudit(
+        {
+          actorId: session.userId,
+          actorEmail: currentUser?.email,
+          action: AUDIT_ACTIONS.ROLE_ASSIGNED,
+          entityType: "Role",
+          entityId: userId,
+          payload: { role, organizationId: organizationId ?? null },
+        },
+        tx,
+      );
     });
 
     return NextResponse.json({

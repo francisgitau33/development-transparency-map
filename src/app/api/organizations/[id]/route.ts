@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { validateOrganization } from "@/lib/validation";
+import { AUDIT_ACTIONS, logAudit } from "@/lib/audit";
 
 export async function GET(
   request: NextRequest,
@@ -83,6 +84,20 @@ export async function PUT(
         _count: {
           select: { projects: true, users: true },
         },
+      },
+    });
+
+    await logAudit({
+      actorId: session.userId,
+      actorEmail: user.email,
+      action: AUDIT_ACTIONS.ORGANIZATION_UPDATED,
+      entityType: "Organization",
+      entityId: organization.id,
+      payload: {
+        name: organization.name,
+        type: organization.type,
+        countryCode: organization.countryCode,
+        active: organization.active,
       },
     });
 

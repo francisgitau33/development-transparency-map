@@ -380,7 +380,7 @@ export default function SectorsCMSPage() {
                   id="sortOrder"
                   type="number"
                   value={formData.sortOrder}
-                  onChange={(e) => setFormData({ ...formData, sortOrder: parseInt(e.target.value) || 0 })}
+                  onChange={(e) => setFormData({ ...formData, sortOrder: Number.parseInt(e.target.value) || 0 })}
                 />
               </div>
 

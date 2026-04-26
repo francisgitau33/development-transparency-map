@@ -170,6 +170,10 @@ async function main() {
         countryCode: row.countryCode,
         sectorKey: row.sectorKey,
         status: row.status as "ACTIVE" | "PLANNED" | "COMPLETED",
+        // Dev-only seed data is intentionally PUBLISHED so the public map has
+        // something to render. Non-seed / production writes default to
+        // PENDING_REVIEW per the Project model default.
+        visibility: "PUBLISHED",
         startDate: new Date(row.startDate),
         endDate: row.endDate ? new Date(row.endDate) : null,
         latitude: parseFloat(row.latitude),

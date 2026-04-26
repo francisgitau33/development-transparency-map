@@ -1,7 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
-import { validateProject, normalizeCoordinate, normalizeDate } from "@/lib/validation";
+import { validateProject } from "@/lib/validation";
+import { AUDIT_ACTIONS, logAudit } from "@/lib/audit";
 
 interface CSVRow {
   title?: string;
@@ -137,9 +139,14 @@ export async function POST(request: NextRequest) {
       if (errors.length > 0) {
         errorRows.push({ row: rowNum, errors, data: row });
       } else if (validation.normalizedData) {
+        // Visibility defaults: CSV rows created by a Partner Admin start in
+        // PENDING_REVIEW; System Owner bulk uploads default to PUBLISHED.
+        const rowVisibility =
+          user.role.role === "SYSTEM_OWNER" ? "PUBLISHED" : "PENDING_REVIEW";
         validRows.push({
           ...validation.normalizedData,
           organizationId,
+          visibility: rowVisibility,
           createdByUserId: session.userId,
           startDate: new Date(validation.normalizedData.startDate as string),
           endDate: validation.normalizedData.endDate
@@ -157,7 +164,10 @@ export async function POST(request: NextRequest) {
         totalRows: rows.length,
         validRows: validRows.length,
         invalidRows: errorRows.length,
-        errorReport: errorRows.length > 0 ? errorRows : null,
+        errorReport:
+          errorRows.length > 0
+            ? (errorRows as unknown as Prisma.InputJsonValue)
+            : Prisma.JsonNull,
       },
     });
 
@@ -188,6 +198,22 @@ export async function POST(request: NextRequest) {
         data: { status: "COMPLETED" },
       });
     }
+
+    await logAudit({
+      actorId: session.userId,
+      actorEmail: user.email,
+      action: AUDIT_ACTIONS.UPLOAD_COMPLETED,
+      entityType: "UploadJob",
+      entityId: uploadJob.id,
+      payload: {
+        organizationId,
+        totalRows: rows.length,
+        validRows: validRows.length,
+        invalidRows: errorRows.length,
+        createdProjects: createdCount,
+        actorRole: user.role.role,
+      },
+    });
 
     return NextResponse.json({
       uploadJobId: uploadJob.id,

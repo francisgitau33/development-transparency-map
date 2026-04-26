@@ -22,7 +22,14 @@ export const PUBLIC_NAV = {
   ],
 } as const;
 
-export const DASHBOARD_NAV = [
+export interface DashboardNavItem {
+  label: string;
+  href: string;
+  icon: string;
+  systemOwnerOnly?: boolean;
+}
+
+export const DASHBOARD_NAV: readonly DashboardNavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: "LayoutDashboard" },
   { label: "Projects", href: "/dashboard/projects", icon: "FolderOpen" },
   { label: "Organizations", href: "/dashboard/organizations", icon: "Building2" },
@@ -30,7 +37,7 @@ export const DASHBOARD_NAV = [
   { label: "Reports", href: "/dashboard/reports", icon: "BarChart3" },
   { label: "CMS", href: "/dashboard/cms", icon: "FileText", systemOwnerOnly: true },
   { label: "Users", href: "/dashboard/users", icon: "Users", systemOwnerOnly: true },
-] as const;
+];
 
 export const ROLE_TYPES = {
   SYSTEM_OWNER: "SYSTEM_OWNER",

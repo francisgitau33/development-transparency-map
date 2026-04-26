@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
+import { AUDIT_ACTIONS, logAudit } from "@/lib/audit";
 
 export async function POST(
   request: NextRequest,
@@ -49,6 +50,15 @@ export async function POST(
         status: "DECLINED",
         notes: notes || null,
       },
+    });
+
+    await logAudit({
+      actorId: session.userId,
+      actorEmail: currentUser?.email,
+      action: AUDIT_ACTIONS.USER_DECLINED,
+      entityType: "User",
+      entityId: userId,
+      payload: { notes: notes ?? null },
     });
 
     return NextResponse.json({ message: "User request declined" });
