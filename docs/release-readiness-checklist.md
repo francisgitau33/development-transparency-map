@@ -213,6 +213,85 @@ exposes write operations.
 
 ---
 
+## Country Development Context (Prompt 8)
+
+Each `ReferenceCountry` carries an optional set of manually entered
+context indicators, exposed through the `CountryIndicator` table. These
+drive the **Country Development Context** panel on the Reports page and
+the Country Context Completeness section in Data Quality.
+
+Supported indicator keys (controlled vocabulary, see
+`src/lib/country-context.ts`):
+
+| Key | Label | Notes |
+|---|---|---|
+| `GDP_PER_CAPITA_CURRENT_USD` | GDP per capita, current USD | value ≥ 0 |
+| `HDI_SCORE` | HDI score | 0 ≤ value ≤ 1 |
+| `HDI_RANK` | HDI rank | rank is a positive integer |
+| `POVERTY_RATE` | Poverty rate | 0 ≤ value ≤ 100 (with unit `%`) |
+| `ODA_RECEIVED_PER_CAPITA` | ODA received per capita | value ≥ 0 |
+| `ODA_AS_PERCENT_GNI` | ODA as % of GNI | value ≥ 0 (upper bound 500 to catch typos) |
+
+Operational guidance:
+
+- **Country indicator values are manually entered and must ALWAYS be
+  interpreted alongside their `source` + `year`.** The Reports page
+  appends the standard caveat on every render:
+  *"Country context indicators are manually entered and should be
+  interpreted with reference to their stated source and year."*
+- **Country population is calculated, not stored.** The Reports page
+  and CMS both derive the calculated country population from active
+  Administrative Area records (`estimatedPopulation > 0`). If any
+  districts / counties are missing population, the "Population data
+  completeness" figure drops below 100% and the UI surfaces a note:
+  *"Country population is calculated from District / County population
+  records in the platform and may be understated if population data is
+  incomplete."*
+- **Review population completeness before interpreting per-capita or
+  country comparisons.** Low completeness propagates into every
+  population-weighted widget downstream.
+- **Record source + year on every indicator row.** Source URL is
+  optional but strongly recommended. A row without a source renders
+  with the neutral marker "Source not recorded" in the UI.
+- **Indicators older than five years are flagged as outdated** in the
+  Data Quality section with a neutral warning:
+  *"Some country context indicators are missing or outdated. Interpret
+  country-level comparisons cautiously."* They are NOT hidden — the
+  operator decides how to act on them.
+- **Do not treat mock / seed values as official.** The seed script
+  labels every row with source `"Development Transparency Map mock data
+  (non-official)"` and notes `"Mock value for demonstration only."`.
+  Do not migrate mock values into a production database.
+- **Up to five years per indicator per country.** The CMS UI enforces
+  this cap; the API enforces the underlying
+  `@@unique([countryCode, indicatorKey, year])` constraint.
+- **Business Environment / Business Ready score is RESERVED for a
+  future phase.** It is intentionally NOT in `ALLOWED_INDICATOR_KEYS`.
+
+Recommended source guidance (not fetched automatically — all values are
+manually entered):
+
+- **GDP per capita**: World Bank World Development Indicators, or the
+  relevant national statistics office.
+- **HDI score / rank**: UNDP Human Development Reports.
+- **Poverty rate**: World Bank, or the relevant national statistics
+  office (record the stated poverty line in `notes`).
+- **ODA**: OECD Creditor Reporting System, World Bank, or the relevant
+  national aid-management platform.
+
+Access control:
+
+- Read: any authenticated dashboard user. Partner Admins see the
+  Country Development Context panel when their selected country has
+  indicators recorded; their project-level analytics remain scoped to
+  their own organisation.
+- Write: **SYSTEM_OWNER only**. Managed through
+  `/dashboard/cms/countries/<code>/context` and the corresponding
+  `/api/reference/countries/:code/context` endpoint. Partner Admins
+  receive a 403 on any write attempt.
+
+---
+
 ## Next prompt candidates (out of scope here)
 
 These are tracked for awareness — they must not be started without
@@ -231,3 +310,9 @@ explicit approval.
   area only; no GeoJSON boundary datasets are fetched or stored.
 - **Automated population import** from external census APIs — out of
   scope. Population data is entered manually through the CMS.
+- **Business Environment / Business Ready score** — the sixth country
+  development indicator reserved by Prompt 8. Not implemented in this
+  phase; must not be added without explicit approval.
+- **Automated country indicator import** from World Bank, UNDP, OECD or
+  any other external API — out of scope. All `CountryIndicator` rows
+  are entered manually by a SYSTEM_OWNER.

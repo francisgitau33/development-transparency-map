@@ -393,6 +393,97 @@ async function main() {
   }
   console.log(`Seeded ${donors.length} donors`);
 
+  // ---------------------------------------------------------------------
+  // Country Development Context indicators (Prompt 8)
+  //
+  // IMPORTANT — values below are mock demonstration data. They roughly
+  // track order-of-magnitude estimates from common open sources but are
+  // deliberately rounded so they clearly read as non-official. Source
+  // labels are set to a clearly non-official string and mirrored in
+  // notes. They must NOT be presented as authoritative statistics.
+  //
+  // Only a subset of seeded countries has indicator data so the "missing
+  // indicator" UI code paths (Data Quality / Reports) see live data in
+  // development. Upserts are keyed on (countryCode, indicatorKey, year)
+  // and use `update: {}` so re-seeding never stomps values a System
+  // Owner has corrected via the CMS.
+  // ---------------------------------------------------------------------
+  const MOCK_INDICATOR_SOURCE =
+    "Development Transparency Map mock data (non-official)";
+  const MOCK_INDICATOR_NOTES = "Mock value for demonstration only.";
+
+  type MockIndicatorRow = {
+    countryCode: string;
+    indicatorKey:
+      | "GDP_PER_CAPITA_CURRENT_USD"
+      | "HDI_SCORE"
+      | "HDI_RANK"
+      | "POVERTY_RATE"
+      | "ODA_RECEIVED_PER_CAPITA"
+      | "ODA_AS_PERCENT_GNI";
+    year: number;
+    value: number | null;
+    rank?: number | null;
+    unit: string | null;
+  };
+
+  const mockIndicators: MockIndicatorRow[] = [
+    // Kenya ------------------------------------------------------------
+    { countryCode: "KE", indicatorKey: "GDP_PER_CAPITA_CURRENT_USD", year: 2021, value: 2040, unit: "USD" },
+    { countryCode: "KE", indicatorKey: "GDP_PER_CAPITA_CURRENT_USD", year: 2022, value: 2100, unit: "USD" },
+    { countryCode: "KE", indicatorKey: "GDP_PER_CAPITA_CURRENT_USD", year: 2023, value: 2170, unit: "USD" },
+    { countryCode: "KE", indicatorKey: "HDI_SCORE", year: 2021, value: 0.575, unit: null },
+    { countryCode: "KE", indicatorKey: "HDI_SCORE", year: 2022, value: 0.601, unit: null },
+    { countryCode: "KE", indicatorKey: "HDI_RANK", year: 2022, value: null, rank: 152, unit: null },
+    { countryCode: "KE", indicatorKey: "POVERTY_RATE", year: 2021, value: 36.1, unit: "%" },
+    { countryCode: "KE", indicatorKey: "POVERTY_RATE", year: 2022, value: 34.5, unit: "%" },
+    { countryCode: "KE", indicatorKey: "ODA_AS_PERCENT_GNI", year: 2022, value: 3.1, unit: "%" },
+    { countryCode: "KE", indicatorKey: "ODA_RECEIVED_PER_CAPITA", year: 2022, value: 61, unit: "USD" },
+
+    // Uganda -----------------------------------------------------------
+    { countryCode: "UG", indicatorKey: "GDP_PER_CAPITA_CURRENT_USD", year: 2021, value: 900, unit: "USD" },
+    { countryCode: "UG", indicatorKey: "GDP_PER_CAPITA_CURRENT_USD", year: 2022, value: 950, unit: "USD" },
+    { countryCode: "UG", indicatorKey: "GDP_PER_CAPITA_CURRENT_USD", year: 2023, value: 1000, unit: "USD" },
+    { countryCode: "UG", indicatorKey: "HDI_SCORE", year: 2022, value: 0.55, unit: null },
+    { countryCode: "UG", indicatorKey: "HDI_RANK", year: 2022, value: null, rank: 166, unit: null },
+    { countryCode: "UG", indicatorKey: "POVERTY_RATE", year: 2022, value: 30.0, unit: "%" },
+    { countryCode: "UG", indicatorKey: "ODA_AS_PERCENT_GNI", year: 2022, value: 5.8, unit: "%" },
+
+    // Tanzania ---------------------------------------------------------
+    { countryCode: "TZ", indicatorKey: "GDP_PER_CAPITA_CURRENT_USD", year: 2021, value: 1150, unit: "USD" },
+    { countryCode: "TZ", indicatorKey: "GDP_PER_CAPITA_CURRENT_USD", year: 2022, value: 1200, unit: "USD" },
+    { countryCode: "TZ", indicatorKey: "GDP_PER_CAPITA_CURRENT_USD", year: 2023, value: 1260, unit: "USD" },
+    { countryCode: "TZ", indicatorKey: "HDI_SCORE", year: 2022, value: 0.532, unit: null },
+    { countryCode: "TZ", indicatorKey: "HDI_RANK", year: 2022, value: null, rank: 160, unit: null },
+    { countryCode: "TZ", indicatorKey: "POVERTY_RATE", year: 2022, value: 26.4, unit: "%" },
+    { countryCode: "TZ", indicatorKey: "ODA_RECEIVED_PER_CAPITA", year: 2022, value: 44, unit: "USD" },
+  ];
+
+  for (const ind of mockIndicators) {
+    await prisma.countryIndicator.upsert({
+      where: {
+        countryCode_indicatorKey_year: {
+          countryCode: ind.countryCode,
+          indicatorKey: ind.indicatorKey,
+          year: ind.year,
+        },
+      },
+      update: {},
+      create: {
+        countryCode: ind.countryCode,
+        indicatorKey: ind.indicatorKey,
+        year: ind.year,
+        value: ind.value,
+        rank: ind.rank ?? null,
+        unit: ind.unit,
+        source: MOCK_INDICATOR_SOURCE,
+        sourceUrl: null,
+        notes: MOCK_INDICATOR_NOTES,
+      },
+    });
+  }
+  console.log(`Seeded ${mockIndicators.length} mock country indicators`);
+
   // Seed default CMS about content
   const existingAbout = await prisma.cmsAbout.findFirst();
   if (!existingAbout) {

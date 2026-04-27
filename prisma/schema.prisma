@@ -166,6 +166,47 @@ model ReferenceCountry {
   updatedAt DateTime    @updatedAt
 
   administrativeAreas AdministrativeArea[]
+  indicators          CountryIndicator[]
+}
+
+// Country Development Context indicators (Prompt 8 — Country Development
+// Context Profile). One row per (country, indicator key, year). All fields
+// except id/countryCode/indicatorKey/year are optional. Calculated values
+// such as country population are derived from AdministrativeArea records
+// at read time and are NEVER stored here (see src/lib/country-context.ts).
+//
+// CORE PRINCIPLE: indicator values are contextual data, not proof of need
+// or effectiveness. The UI must always display them alongside their stated
+// source + year.
+//
+// Allowed indicatorKey values are enforced in application code (not via
+// a Prisma enum) so that new indicators can be added without a schema
+// migration. See ALLOWED_INDICATOR_KEYS in src/lib/country-context.ts.
+model CountryIndicator {
+  id           String   @id @default(cuid())
+  countryCode  String
+  indicatorKey String
+  year         Int
+
+  // Numeric value. Some indicators (HDI) may carry only `rank`, so `value`
+  // is nullable. `rank` is a positive integer where present (e.g. HDI
+  // rank). `unit` is free-text ("USD", "%", "per 1,000 people", …).
+  value        Float?
+  rank         Int?
+  unit         String?
+  source       String?
+  sourceUrl    String?
+  notes        String?
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  country ReferenceCountry @relation(fields: [countryCode], references: [code], onDelete: Cascade)
+
+  @@unique([countryCode, indicatorKey, year])
+  @@index([countryCode])
+  @@index([indicatorKey])
+  @@index([year])
 }
 
 // Administrative Area / District-County reference data.

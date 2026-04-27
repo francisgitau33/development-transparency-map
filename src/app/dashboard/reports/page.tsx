@@ -1191,6 +1191,72 @@ function DonorDependencyCard({
 // Page
 // =============================================================================
 
+// -----------------------------------------------------------------------------
+// Types for /api/reference/countries/:code/context (Prompt 8)
+// -----------------------------------------------------------------------------
+
+type CountryIndicatorKey =
+  | "GDP_PER_CAPITA_CURRENT_USD"
+  | "HDI_SCORE"
+  | "HDI_RANK"
+  | "POVERTY_RATE"
+  | "ODA_RECEIVED_PER_CAPITA"
+  | "ODA_AS_PERCENT_GNI";
+
+interface CountryIndicatorEntry {
+  year: number;
+  value: number | null;
+  rank: number | null;
+  unit: string | null;
+  source: string | null;
+  sourceUrl: string | null;
+  notes: string | null;
+}
+
+interface CountryIndicatorGroup {
+  indicatorKey: CountryIndicatorKey;
+  label: string;
+  shortLabel: string;
+  defaultUnit: string | null;
+  history: CountryIndicatorEntry[];
+  latest: CountryIndicatorEntry | null;
+}
+
+interface CountryContextResponse {
+  country: { code: string; name: string };
+  populationSummary: {
+    calculatedPopulation: number | null;
+    activeAdministrativeAreas: number;
+    administrativeAreasWithPopulation: number;
+    administrativeAreasMissingPopulation: number;
+    populationCompletenessPercent: number | null;
+    populationYearMin: number | null;
+    populationYearMax: number | null;
+    understatedWarning: boolean;
+    note: string;
+  };
+  indicators: Record<CountryIndicatorKey, CountryIndicatorGroup>;
+  recency: Array<{
+    indicatorKey: CountryIndicatorKey;
+    label: string;
+    latestYear: number | null;
+    yearsSinceLatest: number | null;
+    outdated: boolean;
+    missing: boolean;
+  }>;
+  completeness: {
+    gdpPerCapitaPresent: boolean;
+    hdiPresent: boolean;
+    povertyRatePresent: boolean;
+    odaPresent: boolean;
+    missingIndicatorLabels: string[];
+    outdatedIndicatorLabels: string[];
+    warning: string | null;
+    populationCompletenessPercent: number | null;
+  };
+  notes: string[];
+}
+
 export default function ReportsPage() {
   const { user, isSystemOwner } = useAuth();
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
@@ -1200,6 +1266,12 @@ export default function ReportsPage() {
   const [spatial, setSpatial] = useState<SpatialVulnerability | null>(null);
   const [spatialLoading, setSpatialLoading] = useState(true);
   const [spatialError, setSpatialError] = useState<string | null>(null);
+  const [countryContext, setCountryContext] =
+    useState<CountryContextResponse | null>(null);
+  const [countryContextLoading, setCountryContextLoading] = useState(false);
+  const [countryContextError, setCountryContextError] = useState<string | null>(
+    null,
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -1329,6 +1401,41 @@ export default function ReportsPage() {
     }
   }, [buildQuery]);
 
+  // Country Development Context — only fetched when a specific country is
+  // selected. Missing / partial indicators must NOT break the page.
+  const fetchCountryContext = useCallback(async () => {
+    if (countryCode === "_all") {
+      setCountryContext(null);
+      setCountryContextError(null);
+      setCountryContextLoading(false);
+      return;
+    }
+    setCountryContextLoading(true);
+    setCountryContextError(null);
+    try {
+      const res = await fetch(
+        `/api/reference/countries/${encodeURIComponent(countryCode)}/context`,
+      );
+      if (!res.ok) {
+        if (res.status === 404) {
+          // Unknown country code is not a blocking error — the Reports page
+          // still renders project-level analytics.
+          setCountryContext(null);
+          return;
+        }
+        throw new Error("Failed to load country context");
+      }
+      const data = (await res.json()) as CountryContextResponse;
+      setCountryContext(data);
+    } catch {
+      setCountryContextError(
+        "Unable to load country development context. Reports below still reflect project data.",
+      );
+    } finally {
+      setCountryContextLoading(false);
+    }
+  }, [countryCode]);
+
   // Load reference data once.
   useEffect(() => {
     (async () => {
@@ -1369,6 +1476,10 @@ export default function ReportsPage() {
   useEffect(() => {
     fetchSpatial();
   }, [fetchSpatial]);
+
+  useEffect(() => {
+    fetchCountryContext();
+  }, [fetchCountryContext]);
 
   const hasFilters =
     countryCode !== "_all" ||
@@ -1649,6 +1760,20 @@ export default function ReportsPage() {
           may affect interpretation.
         </span>
       </div>
+
+      {/* -------------------------------------------------------------- */}
+      {/* 1.5 Country Development Context (Prompt 8 · Part E)            */}
+      {/* Placed between Filters and Overview. Only renders when a       */}
+      {/* country is selected. Gracefully hides when indicators are      */}
+      {/* missing — it must never block the rest of the page.            */}
+      {/* -------------------------------------------------------------- */}
+      <CountryContextPanel
+        countryCode={countryCode}
+        data={countryContext}
+        loading={countryContextLoading}
+        error={countryContextError}
+        countries={countries}
+      />
 
       {loading && <LoadingState message="Loading analytics..." />}
       {error && <ErrorState message={error} onRetry={fetchAnalytics} />}
@@ -2812,6 +2937,17 @@ export default function ReportsPage() {
                   </div>
                 </CardContent>
               </Card>
+            )}
+
+            {/* ----------------------------------------------------------- */}
+            {/* Country Context Completeness (Prompt 8 · Part G)           */}
+            {/* Only shown when a country is selected. Never breaks when   */}
+            {/* indicators are missing.                                     */}
+            {/* ----------------------------------------------------------- */}
+            {countryCode !== "_all" && countryContext && (
+              <CountryContextDataQualityCard
+                data={countryContext}
+              />
             )}
           </section>
         </>
@@ -5190,5 +5326,577 @@ function SpatialVulnerabilitySection({
         </CardHeader>
       </Card>
     </div>
+  );
+}
+// =============================================================================
+// Country Development Context panel (Prompt 8 · Parts E + G)
+// =============================================================================
+
+function formatIndicatorValue(
+  entry: CountryIndicatorEntry | null,
+  defaultUnit: string | null,
+): string {
+  if (!entry) return "—";
+  if (entry.value === null && entry.rank === null) return "—";
+  const unit = entry.unit ?? defaultUnit ?? "";
+  if (entry.value !== null) {
+    // % values get 1 decimal, HDI gets 3 decimals, otherwise let the value
+    // drive formatting with thousand separators.
+    const abs = Math.abs(entry.value);
+    let formatted: string;
+    if (unit === "%" || unit === "percent") {
+      formatted = entry.value.toFixed(1);
+    } else if (abs > 0 && abs < 1) {
+      formatted = entry.value.toFixed(3);
+    } else {
+      formatted = entry.value.toLocaleString("en-US", {
+        maximumFractionDigits: 2,
+      });
+    }
+    return unit ? `${formatted} ${unit}` : formatted;
+  }
+  if (entry.rank !== null) {
+    return `#${entry.rank}`;
+  }
+  return "—";
+}
+
+function CountryContextPanel({
+  countryCode,
+  data,
+  loading,
+  error,
+  countries,
+}: {
+  countryCode: string;
+  data: CountryContextResponse | null;
+  loading: boolean;
+  error: string | null;
+  countries: Country[];
+}) {
+  // No country selected → show a neutral prompt so the card slot is
+  // explicit without being noisy.
+  if (countryCode === "_all") {
+    return (
+      <Card data-design-id="reports-country-context-empty">
+        <CardHeader className="py-3">
+          <div className="flex items-center gap-2 text-sm text-slate-600">
+            <Globe className="w-4 h-4 text-slate-500" aria-hidden="true" />
+            Select a country to view country development context.
+          </div>
+        </CardHeader>
+      </Card>
+    );
+  }
+
+  if (loading) {
+    return (
+      <Card data-design-id="reports-country-context-loading">
+        <CardHeader className="py-3">
+          <CardDescription className="text-sm">
+            Loading country development context…
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card data-design-id="reports-country-context-error">
+        <CardHeader className="py-3">
+          <CardDescription className="text-sm text-amber-700">
+            {error}
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
+
+  if (!data) return null;
+
+  const { populationSummary, indicators, recency, notes } = data;
+  const countryName =
+    countries.find((c) => c.code === countryCode)?.name ?? data.country.name;
+
+  const recencyByKey = new Map(recency.map((r) => [r.indicatorKey, r]));
+  const flagOutdated = (key: CountryIndicatorKey) =>
+    recencyByKey.get(key)?.outdated ?? false;
+
+  // Collect trend years across the five data points so we can emit a
+  // compact shared table.
+  const trendKeys: CountryIndicatorKey[] = [
+    "GDP_PER_CAPITA_CURRENT_USD",
+    "HDI_SCORE",
+    "POVERTY_RATE",
+    "ODA_RECEIVED_PER_CAPITA",
+    "ODA_AS_PERCENT_GNI",
+  ];
+  const yearSet = new Set<number>();
+  for (const key of trendKeys) {
+    for (const entry of indicators[key]?.history ?? []) {
+      yearSet.add(entry.year);
+    }
+  }
+  const trendYears = Array.from(yearSet).sort((a, b) => b - a).slice(0, 5);
+
+  const odaLatest =
+    indicators.ODA_RECEIVED_PER_CAPITA?.latest ??
+    indicators.ODA_AS_PERCENT_GNI?.latest ??
+    null;
+  const odaHasBoth =
+    indicators.ODA_RECEIVED_PER_CAPITA?.latest &&
+    indicators.ODA_AS_PERCENT_GNI?.latest;
+
+  return (
+    <Card data-design-id="reports-country-context">
+      <CardHeader className="pb-3">
+        <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Globe className="w-4 h-4 text-slate-500" aria-hidden="true" />
+              Country Development Context
+            </CardTitle>
+            <CardDescription>
+              {countryName} — contextual indicators. Not proof of need,
+              deprivation, or effectiveness.
+            </CardDescription>
+          </div>
+          <Badge variant="outline" className="bg-slate-50 text-slate-600 w-fit">
+            Contextual indicator
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Population summary ------------------------------------------- */}
+        <div
+          data-design-id="reports-country-context-population"
+          className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-3 text-sm"
+        >
+          <div className="rounded-md border border-slate-200 p-2.5">
+            <div className="text-xs text-slate-500">
+              Calculated country population
+            </div>
+            <div className="text-lg font-semibold text-slate-900 tabular-nums">
+              {populationSummary.calculatedPopulation !== null
+                ? populationSummary.calculatedPopulation.toLocaleString("en-US")
+                : "Population data unavailable"}
+            </div>
+            {populationSummary.populationYearMin &&
+              populationSummary.populationYearMax && (
+                <div className="text-[11px] text-slate-500 mt-0.5">
+                  Source years:{" "}
+                  {populationSummary.populationYearMin ===
+                  populationSummary.populationYearMax
+                    ? populationSummary.populationYearMin
+                    : `${populationSummary.populationYearMin}–${populationSummary.populationYearMax}`}
+                </div>
+              )}
+          </div>
+          <div className="rounded-md border border-slate-200 p-2.5">
+            <div className="text-xs text-slate-500">Population completeness</div>
+            <div className="text-lg font-semibold tabular-nums">
+              {populationSummary.populationCompletenessPercent !== null
+                ? `${Math.round(
+                    populationSummary.populationCompletenessPercent,
+                  )}%`
+                : "—"}
+            </div>
+            <div className="text-[11px] text-slate-500 mt-0.5">
+              {populationSummary.administrativeAreasWithPopulation} /{" "}
+              {populationSummary.activeAdministrativeAreas} districts /
+              counties
+            </div>
+          </div>
+          <div className="rounded-md border border-slate-200 p-2.5">
+            <div className="text-xs text-slate-500">
+              Districts / counties missing population
+            </div>
+            <div
+              className={`text-lg font-semibold tabular-nums ${
+                populationSummary.administrativeAreasMissingPopulation > 0
+                  ? "text-amber-700"
+                  : "text-slate-900"
+              }`}
+            >
+              {populationSummary.administrativeAreasMissingPopulation}
+            </div>
+          </div>
+          <div className="rounded-md border border-slate-200 p-2.5">
+            <div className="text-xs text-slate-500">Active districts / counties</div>
+            <div className="text-lg font-semibold tabular-nums">
+              {populationSummary.activeAdministrativeAreas}
+            </div>
+          </div>
+        </div>
+
+        {/* Latest indicator cards --------------------------------------- */}
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 text-sm">
+          <LatestIndicatorCard
+            title="GDP per capita, current USD"
+            group={indicators.GDP_PER_CAPITA_CURRENT_USD}
+            outdated={flagOutdated("GDP_PER_CAPITA_CURRENT_USD")}
+          />
+          <LatestIndicatorCard
+            title="HDI score / rank"
+            group={indicators.HDI_SCORE}
+            supplementGroup={indicators.HDI_RANK}
+            outdated={
+              flagOutdated("HDI_SCORE") || flagOutdated("HDI_RANK")
+            }
+          />
+          <LatestIndicatorCard
+            title="Poverty rate"
+            group={indicators.POVERTY_RATE}
+            outdated={flagOutdated("POVERTY_RATE")}
+          />
+          <div className="rounded-md border border-slate-200 p-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-xs text-slate-500">ODA received (latest)</div>
+              {(flagOutdated("ODA_RECEIVED_PER_CAPITA") ||
+                flagOutdated("ODA_AS_PERCENT_GNI")) && (
+                <Badge
+                  variant="outline"
+                  className="bg-amber-50 border-amber-200 text-amber-800 text-[10px] px-1.5 py-0"
+                >
+                  &gt; 5 years old
+                </Badge>
+              )}
+            </div>
+            {odaLatest ? (
+              <>
+                {odaHasBoth ? (
+                  <div className="space-y-0.5 mt-0.5">
+                    <div className="text-base font-semibold text-slate-900 tabular-nums">
+                      {formatIndicatorValue(
+                        indicators.ODA_RECEIVED_PER_CAPITA.latest,
+                        indicators.ODA_RECEIVED_PER_CAPITA.defaultUnit,
+                      )}{" "}
+                      <span className="text-xs font-normal text-slate-500">
+                        per capita
+                      </span>
+                    </div>
+                    <div className="text-base font-semibold text-slate-900 tabular-nums">
+                      {formatIndicatorValue(
+                        indicators.ODA_AS_PERCENT_GNI.latest,
+                        indicators.ODA_AS_PERCENT_GNI.defaultUnit,
+                      )}{" "}
+                      <span className="text-xs font-normal text-slate-500">
+                        of GNI
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-lg font-semibold text-slate-900 tabular-nums">
+                    {formatIndicatorValue(
+                      odaLatest,
+                      indicators.ODA_RECEIVED_PER_CAPITA?.defaultUnit ??
+                        indicators.ODA_AS_PERCENT_GNI?.defaultUnit ??
+                        null,
+                    )}
+                  </div>
+                )}
+                <div className="text-[11px] text-slate-500 mt-0.5">
+                  {odaLatest.year}
+                  {odaLatest.source ? ` · ${odaLatest.source}` : ""}
+                </div>
+              </>
+            ) : (
+              <div className="text-sm text-slate-500">Not recorded</div>
+            )}
+          </div>
+        </div>
+
+        {/* Five-year trend mini-table ---------------------------------- */}
+        {trendYears.length > 0 && (
+          <div
+            data-design-id="reports-country-context-trend"
+            className="overflow-x-auto"
+          >
+            <Table className="text-xs">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="whitespace-nowrap">Indicator</TableHead>
+                  {trendYears.map((y) => (
+                    <TableHead key={y} className="text-right tabular-nums">
+                      {y}
+                    </TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {trendKeys.map((key) => {
+                  const group = indicators[key];
+                  if (!group || group.history.length === 0) return null;
+                  const lookup = new Map(group.history.map((h) => [h.year, h]));
+                  return (
+                    <TableRow key={key}>
+                      <TableCell className="whitespace-nowrap">
+                        {group.shortLabel}
+                      </TableCell>
+                      {trendYears.map((y) => (
+                        <TableCell
+                          key={y}
+                          className="text-right tabular-nums"
+                        >
+                          {formatIndicatorValue(
+                            lookup.get(y) ?? null,
+                            group.defaultUnit,
+                          )}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+
+        {/* Interpretation notes --------------------------------------- */}
+        <div className="space-y-1">
+          {notes.map((n) => (
+            <div
+              key={n}
+              className="flex items-start gap-2 text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-md px-3 py-2"
+            >
+              <Info className="w-4 h-4 mt-0.5 text-slate-500 shrink-0" />
+              <span>{n}</span>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function LatestIndicatorCard({
+  title,
+  group,
+  supplementGroup,
+  outdated,
+}: {
+  title: string;
+  group: CountryIndicatorGroup;
+  supplementGroup?: CountryIndicatorGroup;
+  outdated: boolean;
+}) {
+  const latest = group.latest;
+  const supplementLatest = supplementGroup?.latest ?? null;
+  return (
+    <div className="rounded-md border border-slate-200 p-2.5">
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-xs text-slate-500">{title}</div>
+        {outdated && latest && (
+          <Badge
+            variant="outline"
+            className="bg-amber-50 border-amber-200 text-amber-800 text-[10px] px-1.5 py-0"
+          >
+            &gt; 5 years old
+          </Badge>
+        )}
+      </div>
+      {latest ? (
+        <>
+          <div className="text-lg font-semibold text-slate-900 tabular-nums">
+            {formatIndicatorValue(latest, group.defaultUnit)}
+            {supplementLatest && (
+              <>
+                {" "}
+                <span className="text-sm font-normal text-slate-500">
+                  (rank {supplementLatest.rank ?? "—"})
+                </span>
+              </>
+            )}
+          </div>
+          <div className="text-[11px] text-slate-500 mt-0.5">
+            {latest.year}
+            {latest.source ? ` · ${latest.source}` : ""}
+          </div>
+        </>
+      ) : supplementLatest ? (
+        <>
+          <div className="text-lg font-semibold text-slate-900 tabular-nums">
+            rank {supplementLatest.rank ?? "—"}
+          </div>
+          <div className="text-[11px] text-slate-500 mt-0.5">
+            {supplementLatest.year}
+            {supplementLatest.source ? ` · ${supplementLatest.source}` : ""}
+          </div>
+        </>
+      ) : (
+        <div className="text-sm text-slate-500">Not recorded</div>
+      )}
+    </div>
+  );
+}
+
+function CountryContextDataQualityCard({
+  data,
+}: {
+  data: CountryContextResponse;
+}) {
+  const { completeness, recency, populationSummary } = data;
+  const recencyByKey = new Map(recency.map((r) => [r.indicatorKey, r]));
+  const rows: Array<{
+    label: string;
+    present: boolean;
+    latestYear: number | null;
+    outdated: boolean;
+  }> = [
+    {
+      label: "GDP per capita, current USD",
+      present: completeness.gdpPerCapitaPresent,
+      latestYear:
+        recencyByKey.get("GDP_PER_CAPITA_CURRENT_USD")?.latestYear ?? null,
+      outdated:
+        recencyByKey.get("GDP_PER_CAPITA_CURRENT_USD")?.outdated ?? false,
+    },
+    {
+      label: "HDI score / rank",
+      present: completeness.hdiPresent,
+      latestYear:
+        recencyByKey.get("HDI_SCORE")?.latestYear ??
+        recencyByKey.get("HDI_RANK")?.latestYear ??
+        null,
+      outdated:
+        (recencyByKey.get("HDI_SCORE")?.outdated ?? false) ||
+        (recencyByKey.get("HDI_RANK")?.outdated ?? false),
+    },
+    {
+      label: "Poverty rate",
+      present: completeness.povertyRatePresent,
+      latestYear: recencyByKey.get("POVERTY_RATE")?.latestYear ?? null,
+      outdated: recencyByKey.get("POVERTY_RATE")?.outdated ?? false,
+    },
+    {
+      label: "ODA received (per capita or % of GNI)",
+      present: completeness.odaPresent,
+      latestYear:
+        recencyByKey.get("ODA_RECEIVED_PER_CAPITA")?.latestYear ??
+        recencyByKey.get("ODA_AS_PERCENT_GNI")?.latestYear ??
+        null,
+      outdated:
+        (recencyByKey.get("ODA_RECEIVED_PER_CAPITA")?.outdated ?? false) ||
+        (recencyByKey.get("ODA_AS_PERCENT_GNI")?.outdated ?? false),
+    },
+  ];
+
+  return (
+    <Card data-design-id="country-context-data-quality">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Globe className="w-5 h-5 text-slate-500" />
+          Country Context Completeness
+        </CardTitle>
+        <CardDescription>
+          Availability and recency of manually recorded country-context
+          indicators for {data.country.name}.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Indicator</TableHead>
+              <TableHead className="text-center">Latest value present?</TableHead>
+              <TableHead className="text-right">Latest year</TableHead>
+              <TableHead className="text-right">Recency</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((r) => (
+              <TableRow key={r.label}>
+                <TableCell className="font-medium">{r.label}</TableCell>
+                <TableCell className="text-center">
+                  {r.present ? (
+                    <Badge
+                      variant="outline"
+                      className="bg-emerald-50 border-emerald-200 text-emerald-800"
+                    >
+                      Yes
+                    </Badge>
+                  ) : (
+                    <Badge
+                      variant="outline"
+                      className="bg-slate-50 text-slate-600"
+                    >
+                      No
+                    </Badge>
+                  )}
+                </TableCell>
+                <TableCell className="text-right tabular-nums">
+                  {r.latestYear ?? "—"}
+                </TableCell>
+                <TableCell className="text-right">
+                  {!r.present ? (
+                    <span className="text-slate-500">—</span>
+                  ) : r.outdated ? (
+                    <Badge
+                      variant="outline"
+                      className="bg-amber-50 border-amber-200 text-amber-800"
+                    >
+                      &gt; 5 years old
+                    </Badge>
+                  ) : (
+                    <Badge
+                      variant="outline"
+                      className="bg-emerald-50 border-emerald-200 text-emerald-800"
+                    >
+                      Recent
+                    </Badge>
+                  )}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+          <div className="rounded-md border border-slate-200 p-2.5">
+            <div className="text-xs text-slate-500">
+              Population data completeness
+            </div>
+            <div className="text-lg font-semibold tabular-nums">
+              {populationSummary.populationCompletenessPercent !== null
+                ? `${Math.round(
+                    populationSummary.populationCompletenessPercent,
+                  )}%`
+                : "—"}
+            </div>
+            <div className="text-[11px] text-slate-500 mt-0.5">
+              {populationSummary.administrativeAreasWithPopulation} /{" "}
+              {populationSummary.activeAdministrativeAreas} active districts /
+              counties have population values.
+            </div>
+          </div>
+          {completeness.missingIndicatorLabels.length > 0 && (
+            <div className="rounded-md border border-slate-200 p-2.5">
+              <div className="text-xs text-slate-500">
+                Missing country context fields
+              </div>
+              <div className="flex flex-wrap gap-1 mt-1">
+                {completeness.missingIndicatorLabels.map((l) => (
+                  <Badge
+                    key={l}
+                    variant="outline"
+                    className="bg-slate-50 text-slate-600"
+                  >
+                    {l}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {completeness.warning && (
+          <div className="flex items-start gap-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+            <AlertTriangle className="w-4 h-4 mt-0.5 text-amber-600 shrink-0" />
+            <span>{completeness.warning}</span>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

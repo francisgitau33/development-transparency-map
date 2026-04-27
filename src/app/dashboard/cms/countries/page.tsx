@@ -16,7 +16,7 @@ import { LoadingState } from "@/components/shared/LoadingState";
 import { ErrorState } from "@/components/shared/ErrorState";
 import { useAuth } from "@/lib/auth-context";
 import { toast } from "sonner";
-import { Plus, ArrowLeft, Pencil, Globe, Search } from "lucide-react";
+import { Plus, ArrowLeft, Pencil, Globe, Search, BarChart3 } from "lucide-react";
 
 interface Country {
   code: string;
@@ -240,14 +240,29 @@ export default function CountriesCMSPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => openDialog(country)}
-                        data-design-id={`country-edit-${country.code}`}
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </Button>
+                      <div className="flex items-center justify-end gap-1">
+                        <Link
+                          href={`/dashboard/cms/countries/${country.code}/context`}
+                          data-design-id={`country-context-${country.code}`}
+                        >
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            title="Manage Country Development Context"
+                          >
+                            <BarChart3 className="w-4 h-4" />
+                          </Button>
+                        </Link>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openDialog(country)}
+                          data-design-id={`country-edit-${country.code}`}
+                          title="Edit country details"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
