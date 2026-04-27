@@ -8,7 +8,23 @@ import { AUDIT_ACTIONS, logAudit } from "@/lib/audit";
 /**
  * PUT /api/reference/administrative-areas/:id
  *
- * SYSTEM_OWNER only. Edits name / type / country / active / sort order.
+ * SYSTEM_OWNER only. Partial update: any field absent from the request body
+ * is preserved from the existing record. Any field present — including
+ * `null` — is treated as an intentional change (so a SYSTEM_OWNER can clear
+ * a previously-set population by submitting `null`).
+ *
+ * This merge behaviour is critical because two different client call sites
+ * hit this endpoint with different shapes:
+ *   1. The Admin Area edit modal sends ALL fields (name, type, countryCode,
+ *      active, sortOrder, estimatedPopulation, populationYear,
+ *      populationSource, populationSourceUrl, populationNotes).
+ *   2. The "Activate / Deactivate" button sends ONLY `{ active }`.
+ *
+ * Before this refactor, the route re-ran validation against a hand-rolled
+ * subset of keys which (a) omitted population fields entirely and (b) coerced
+ * every missing field to `null`, silently wiping population metadata on every
+ * toggle or edit. See issue #<internal> reported from the live app.
+ *
  * Uniqueness on (countryCode, name) is still enforced.
  */
 export async function PUT(
@@ -34,7 +50,7 @@ export async function PUT(
     }
 
     const { id } = await params;
-    const data = await request.json();
+    const data = (await request.json()) as Record<string, unknown>;
 
     const existing = await prisma.administrativeArea.findUnique({
       where: { id },
@@ -46,13 +62,34 @@ export async function PUT(
       );
     }
 
-    const validation = validateAdministrativeArea({
-      name: data.name ?? existing.name,
-      countryCode: data.countryCode ?? existing.countryCode,
-      type: data.type ?? existing.type,
-      active: data.active ?? existing.active,
-      sortOrder: data.sortOrder ?? existing.sortOrder,
-    });
+    // Merge payload into the existing row. Only keys actually present in the
+    // request body override existing values. `null` is a valid intentional
+    // clear (e.g. user emptied the Estimated Population field).
+    const has = (k: string) =>
+      Object.prototype.hasOwnProperty.call(data, k);
+    const pick = <T,>(k: string, fallback: T): unknown =>
+      has(k) ? (data[k] as unknown) : (fallback as unknown);
+
+    const mergedForValidation: Record<string, unknown> = {
+      name: pick("name", existing.name),
+      countryCode: pick("countryCode", existing.countryCode),
+      type: pick("type", existing.type),
+      active: pick("active", existing.active),
+      sortOrder: pick("sortOrder", existing.sortOrder),
+      estimatedPopulation: pick(
+        "estimatedPopulation",
+        existing.estimatedPopulation,
+      ),
+      populationYear: pick("populationYear", existing.populationYear),
+      populationSource: pick("populationSource", existing.populationSource),
+      populationSourceUrl: pick(
+        "populationSourceUrl",
+        existing.populationSourceUrl,
+      ),
+      populationNotes: pick("populationNotes", existing.populationNotes),
+    };
+
+    const validation = validateAdministrativeArea(mergedForValidation);
     if (!validation.valid) {
       return NextResponse.json(
         { error: "Validation failed", details: validation.errors },

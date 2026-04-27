@@ -16,7 +16,15 @@ import { LoadingState } from "@/components/shared/LoadingState";
 import { ErrorState } from "@/components/shared/ErrorState";
 import { useAuth } from "@/lib/auth-context";
 import { toast } from "sonner";
-import { Plus, ArrowLeft, Pencil, Globe, Search, BarChart3 } from "lucide-react";
+import {
+  Plus,
+  ArrowLeft,
+  Pencil,
+  Globe,
+  Search,
+  BarChart3,
+  Info,
+} from "lucide-react";
 
 interface Country {
   code: string;
@@ -118,10 +126,35 @@ export default function CountriesCMSPage() {
         throw new Error(data.error || "Failed to save country");
       }
 
-      toast.success(editingCountry ? "Country updated successfully" : "Country created successfully");
+      // Two-step country-context flow (see Prompt 9 · Part D, Option 2):
+      // After a brand-new country is created, route the System Owner
+      // straight to the Development Context editor for that code. This
+      // removes the previous gap where the Add Country modal only collected
+      // base fields and the user had to discover the context screen
+      // afterwards. Edit Country keeps its existing behaviour (close modal,
+      // refresh table) so power-users can batch-edit base fields quickly.
+      const createdCode = (
+        (data?.country?.code as string | undefined) ?? formData.code
+      )
+        .trim()
+        .toUpperCase();
+
       setDialogOpen(false);
       resetForm();
-      fetchCountries();
+
+      if (editingCountry) {
+        toast.success("Country updated successfully");
+        fetchCountries();
+      } else {
+        toast.success(
+          "Country created. Continue on the Development Context screen to add GDP per capita, HDI, poverty, and ODA indicators.",
+        );
+        if (createdCode) {
+          router.push(`/dashboard/cms/countries/${createdCode}/context`);
+        } else {
+          fetchCountries();
+        }
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save country");
     } finally {
@@ -280,12 +313,66 @@ export default function CountriesCMSPage() {
             </DialogTitle>
             <DialogDescription>
               {editingCountry
-                ? "Update country details"
-                : "Add a new country or territory"}
+                ? "Update country details. Population is calculated from District / County records and cannot be edited here."
+                : "Add a new country or territory. Development context indicators are added on the next screen."}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit}>
             <div className="grid gap-4 py-4">
+              {!editingCountry && (
+                <div
+                  data-design-id="country-add-context-notice"
+                  className="flex gap-3 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900"
+                >
+                  <Info className="w-4 h-4 mt-0.5 shrink-0 text-sky-600" />
+                  <div>
+                    <p className="font-medium">
+                      After creating the country, you will be taken to the
+                      Development Context screen.
+                    </p>
+                    <p className="text-xs text-sky-800/80 mt-0.5">
+                      There you can enter GDP per capita, HDI score &amp; rank,
+                      poverty rate, and ODA indicators (up to 5 years each).
+                      Country population is calculated from District / County
+                      records entered under Districts / Counties — it is not
+                      manually set at country level.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {editingCountry && (
+                <div
+                  data-design-id="country-edit-context-link"
+                  className="flex items-start justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm"
+                >
+                  <div className="flex items-start gap-2">
+                    <BarChart3 className="w-4 h-4 mt-0.5 shrink-0 text-sky-600" />
+                    <div>
+                      <p className="font-medium text-slate-900">
+                        Development Context indicators
+                      </p>
+                      <p className="text-xs text-slate-600 mt-0.5">
+                        GDP per capita, HDI, poverty rate, and ODA are managed
+                        on a dedicated screen.
+                      </p>
+                    </div>
+                  </div>
+                  <Link
+                    href={`/dashboard/cms/countries/${editingCountry.code}/context`}
+                    onClick={() => setDialogOpen(false)}
+                  >
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="whitespace-nowrap"
+                    >
+                      Manage context
+                    </Button>
+                  </Link>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
                   <Label htmlFor="code">Country Code *</Label>

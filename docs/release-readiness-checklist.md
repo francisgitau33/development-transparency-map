@@ -292,6 +292,34 @@ Access control:
 
 ---
 
+## Prompt 9 — Population persistence & Country Context form fixes
+
+Two targeted bug fixes verified in this release:
+
+1. **Administrative Area population persistence** —
+   `PUT /api/reference/administrative-areas/:id` is now a true partial
+   update. Fields omitted from the request body are preserved from the
+   existing row; fields sent as explicit `null` (or empty string) are
+   intentionally cleared. This resolves the reported regression where
+   clicking *Deactivate* — which sends only `{ active }` — silently wiped
+   `estimatedPopulation`, `populationYear`, `populationSource`,
+   `populationSourceUrl`, and `populationNotes`. Covered by
+   `tests/api/administrative-areas.test.ts` (14 new tests), including a
+   dedicated regression case for the activate/deactivate path.
+
+2. **Country Development Context form gap** — the *Add Country* modal on
+   `/dashboard/cms/countries` now explicitly routes a freshly-created
+   country to `/dashboard/cms/countries/<code>/context` so the SYSTEM_OWNER
+   can enter GDP per capita, HDI, poverty, and ODA indicators right away.
+   The *Edit Country* modal shows a prominent "Manage context" shortcut
+   that opens the same page. Country population is still calculated from
+   District / County records and cannot be entered at country level.
+
+No schema changes. No new migrations. Validation rules, auth / RBAC, and
+the country-context API contract are unchanged.
+
+---
+
 ## Next prompt candidates (out of scope here)
 
 These are tracked for awareness — they must not be started without
