@@ -13,6 +13,7 @@ import {
   parseOptionalPopulation,
   parseOptionalPopulationYear,
   validateAdministrativeArea,
+  validateOrganization,
 } from "./validation";
 
 describe("parseOptionalPopulation", () => {
@@ -154,4 +155,84 @@ describe("validateAdministrativeArea (population fields)", () => {
     expect(r.normalizedData?.populationYear).toBeNull();
     expect(r.normalizedData?.populationSource).toBeNull();
   });
+describe("validateOrganization (multi-country)", () => {
+  const base = { name: "World Vision", type: "INGO" };
+
+  it("rejects empty name / invalid type", () => {
+    expect(validateOrganization({}).valid).toBe(false);
+    expect(
+      validateOrganization({ ...base, type: "NOPE", countryIds: ["US"] }).valid,
+    ).toBe(false);
+  });
+
+  it("accepts the new shape { scope: SELECTED, countryIds: [c1] }", () => {
+    const r = validateOrganization({
+      ...base,
+      countryScope: "SELECTED",
+      countryIds: ["us"],
+    });
+    expect(r.valid).toBe(true);
+    expect(r.normalizedData?.countryScope).toBe("SELECTED");
+    expect(r.normalizedData?.countryIds).toEqual(["US"]);
+    // Legacy column mirrored to first selected country.
+    expect(r.normalizedData?.countryCode).toBe("US");
+  });
+
+  it("accepts multiple countries and de-duplicates / uppercases", () => {
+    const r = validateOrganization({
+      ...base,
+      countryScope: "SELECTED",
+      countryIds: ["ke", "TZ", "ke", "ug"],
+    });
+    expect(r.valid).toBe(true);
+    expect(r.normalizedData?.countryIds).toEqual(["KE", "TZ", "UG"]);
+    expect(r.normalizedData?.countryCode).toBe("KE");
+  });
+
+  it("accepts { scope: ALL } with empty ids and clears legacy code", () => {
+    const r = validateOrganization({
+      ...base,
+      countryScope: "ALL",
+      countryIds: [],
+    });
+    expect(r.valid).toBe(true);
+    expect(r.normalizedData?.countryScope).toBe("ALL");
+    expect(r.normalizedData?.countryIds).toEqual([]);
+    expect(r.normalizedData?.countryCode).toBeNull();
+  });
+
+  it("ignores incoming countryIds when scope is ALL (canonicalises to [])", () => {
+    const r = validateOrganization({
+      ...base,
+      countryScope: "ALL",
+      countryIds: ["US", "KE"],
+    });
+    expect(r.valid).toBe(true);
+    expect(r.normalizedData?.countryIds).toEqual([]);
+  });
+
+  it("rejects SELECTED scope with zero countries", () => {
+    const r = validateOrganization({
+      ...base,
+      countryScope: "SELECTED",
+      countryIds: [],
+    });
+    expect(r.valid).toBe(false);
+    expect(r.errors[0]).toMatch(/at least one country/i);
+  });
+
+  it("back-compat: legacy { countryCode: 'US' } is promoted to the new shape", () => {
+    const r = validateOrganization({ ...base, countryCode: "us" });
+    expect(r.valid).toBe(true);
+    expect(r.normalizedData?.countryScope).toBe("SELECTED");
+    expect(r.normalizedData?.countryIds).toEqual(["US"]);
+    expect(r.normalizedData?.countryCode).toBe("US");
+  });
+
+  it("back-compat: legacy payload with no country at all is rejected", () => {
+    const r = validateOrganization({ ...base });
+    expect(r.valid).toBe(false);
+    expect(r.errors[0]).toMatch(/at least one country/i);
+  });
+});
 });

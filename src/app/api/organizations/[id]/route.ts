@@ -3,6 +3,35 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { validateOrganization } from "@/lib/validation";
 import { AUDIT_ACTIONS, logAudit } from "@/lib/audit";
+import {
+  filterActiveCountryCodes,
+  readOrganizationCountries,
+  syncOrganizationCountries,
+} from "@/lib/organization-countries";
+
+function serializeOrganization(
+  org: Awaited<ReturnType<typeof prisma.organization.findFirstOrThrow>> & {
+    operatingCountries?: { countryCode: string }[];
+    _count?: { projects: number; users: number };
+  },
+) {
+  const { countryScope, countryIds } = readOrganizationCountries(org);
+  return {
+    id: org.id,
+    name: org.name,
+    type: org.type,
+    countryScope,
+    countryIds,
+    countryCode: org.countryCode,
+    website: org.website,
+    contactEmail: org.contactEmail,
+    description: org.description,
+    active: org.active,
+    createdAt: org.createdAt,
+    updatedAt: org.updatedAt,
+    _count: org._count,
+  };
+}
 
 export async function GET(
   request: NextRequest,
@@ -14,6 +43,7 @@ export async function GET(
     const organization = await prisma.organization.findUnique({
       where: { id },
       include: {
+        operatingCountries: { select: { countryCode: true } },
         _count: {
           select: { projects: true, users: true },
         },
@@ -24,7 +54,9 @@ export async function GET(
       return NextResponse.json({ error: "Organization not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ organization });
+    return NextResponse.json({
+      organization: serializeOrganization(organization),
+    });
   } catch (error) {
     console.error("Get organization error:", error);
     return NextResponse.json(
@@ -77,14 +109,66 @@ export async function PUT(
       );
     }
 
-    const organization = await prisma.organization.update({
-      where: { id },
-      data: validation.normalizedData as never,
-      include: {
-        _count: {
-          select: { projects: true, users: true },
+    const normalized = validation.normalizedData as {
+      name: string;
+      type: string;
+      countryScope: "ALL" | "SELECTED";
+      countryIds: string[];
+      countryCode: string | null;
+      website: string | null;
+      contactEmail: string | null;
+      description: string | null;
+      active: boolean;
+    };
+
+    if (normalized.countryScope === "SELECTED") {
+      const { accepted, rejected } = await filterActiveCountryCodes(
+        normalized.countryIds,
+      );
+      if (rejected.length > 0) {
+        return NextResponse.json(
+          {
+            error: "One or more selected countries are invalid or inactive.",
+            details: rejected.map(
+              (code) => `Country '${code}' is not active or does not exist.`,
+            ),
+          },
+          { status: 400 },
+        );
+      }
+      normalized.countryIds = accepted;
+      normalized.countryCode = accepted[0] ?? null;
+    }
+
+    const organization = await prisma.$transaction(async (tx) => {
+      await tx.organization.update({
+        where: { id },
+        data: {
+          name: normalized.name,
+          type: normalized.type as never,
+          countryScope: normalized.countryScope,
+          countryCode: normalized.countryCode,
+          website: normalized.website,
+          contactEmail: normalized.contactEmail,
+          description: normalized.description,
+          active: normalized.active,
         },
-      },
+      });
+
+      await syncOrganizationCountries(
+        tx,
+        id,
+        normalized.countryScope,
+        normalized.countryIds,
+      );
+
+      return tx.organization.findUniqueOrThrow({
+        where: { id },
+        include: {
+          operatingCountries: { select: { countryCode: true } },
+          _count: { select: { projects: true, users: true } },
+        },
+      });
     });
 
     await logAudit({
@@ -96,12 +180,15 @@ export async function PUT(
       payload: {
         name: organization.name,
         type: organization.type,
-        countryCode: organization.countryCode,
+        countryScope: normalized.countryScope,
+        countryIds: normalized.countryIds,
         active: organization.active,
       },
     });
 
-    return NextResponse.json({ organization });
+    return NextResponse.json({
+      organization: serializeOrganization(organization),
+    });
   } catch (error) {
     console.error("Update organization error:", error);
     return NextResponse.json(

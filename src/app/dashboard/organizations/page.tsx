@@ -14,15 +14,33 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { LoadingState } from "@/components/shared/LoadingState";
 import { ErrorState } from "@/components/shared/ErrorState";
 import { EmptyState } from "@/components/shared/EmptyState";
+import {
+  CountriesOfOperationSelect,
+  formatOrganizationCountries,
+  type CountryOption,
+} from "@/components/shared/CountriesOfOperationSelect";
 import { useAuth } from "@/lib/auth-context";
 import { toast } from "sonner";
-import { Plus, Building2, Search, ExternalLink, FolderOpen, Users, Pencil } from "lucide-react";
+import {
+  Plus,
+  Building2,
+  Search,
+  ExternalLink,
+  FolderOpen,
+  Users,
+  Pencil,
+  Globe,
+} from "lucide-react";
 
 interface Organization {
   id: string;
   name: string;
   type: string;
-  countryCode: string;
+  countryScope: "ALL" | "SELECTED";
+  countryIds: string[];
+  // Legacy field — still emitted by the API for back-compat. We prefer
+  // countryScope/countryIds everywhere in the UI.
+  countryCode: string | null;
   website: string | null;
   contactEmail: string | null;
   description: string | null;
@@ -33,11 +51,6 @@ interface Organization {
   };
 }
 
-interface Country {
-  code: string;
-  name: string;
-}
-
 const ORG_TYPES = [
   { value: "LNGO", label: "Local NGO" },
   { value: "INGO", label: "International NGO" },
@@ -46,10 +59,32 @@ const ORG_TYPES = [
   { value: "OTHER", label: "Other" },
 ];
 
+interface FormState {
+  name: string;
+  type: string;
+  countryScope: "ALL" | "SELECTED";
+  countryIds: string[];
+  website: string;
+  contactEmail: string;
+  description: string;
+  active: boolean;
+}
+
+const EMPTY_FORM: FormState = {
+  name: "",
+  type: "LNGO",
+  countryScope: "SELECTED",
+  countryIds: [],
+  website: "",
+  contactEmail: "",
+  description: "",
+  active: true,
+};
+
 export default function OrganizationsPage() {
   const { isSystemOwner } = useAuth();
   const [organizations, setOrganizations] = useState<Organization[]>([]);
-  const [countries, setCountries] = useState<Country[]>([]);
+  const [countries, setCountries] = useState<CountryOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -58,15 +93,7 @@ export default function OrganizationsPage() {
   const [editingOrg, setEditingOrg] = useState<Organization | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const [formData, setFormData] = useState({
-    name: "",
-    type: "LNGO",
-    countryCode: "",
-    website: "",
-    contactEmail: "",
-    description: "",
-    active: true,
-  });
+  const [formData, setFormData] = useState<FormState>(EMPTY_FORM);
 
   const fetchData = async () => {
     setLoading(true);
@@ -86,7 +113,7 @@ export default function OrganizationsPage() {
 
       setOrganizations(orgsData.organizations || []);
       setCountries(countriesData.countries || []);
-    } catch (err) {
+    } catch (_err) {
       setError("Unable to load organizations. Please try again.");
     } finally {
       setLoading(false);
@@ -98,15 +125,7 @@ export default function OrganizationsPage() {
   }, []);
 
   const resetForm = () => {
-    setFormData({
-      name: "",
-      type: "LNGO",
-      countryCode: "",
-      website: "",
-      contactEmail: "",
-      description: "",
-      active: true,
-    });
+    setFormData({ ...EMPTY_FORM });
     setEditingOrg(null);
   };
 
@@ -116,7 +135,8 @@ export default function OrganizationsPage() {
       setFormData({
         name: org.name,
         type: org.type,
-        countryCode: org.countryCode,
+        countryScope: org.countryScope,
+        countryIds: org.countryIds,
         website: org.website || "",
         contactEmail: org.contactEmail || "",
         description: org.description || "",
@@ -130,30 +150,67 @@ export default function OrganizationsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Client-side guard matching the server-side rule: scope=SELECTED must
+    // have ≥ 1 country.
+    if (
+      formData.countryScope === "SELECTED" &&
+      formData.countryIds.length === 0
+    ) {
+      toast.error(
+        "Select at least one country of operation, or choose \"All Countries\".",
+      );
+      return;
+    }
+
     setSaving(true);
 
     try {
-      const url = editingOrg ? `/api/organizations/${editingOrg.id}` : "/api/organizations";
+      const url = editingOrg
+        ? `/api/organizations/${editingOrg.id}`
+        : "/api/organizations";
       const method = editingOrg ? "PUT" : "POST";
 
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          name: formData.name,
+          type: formData.type,
+          countryScope: formData.countryScope,
+          countryIds: formData.countryIds,
+          website: formData.website,
+          contactEmail: formData.contactEmail,
+          description: formData.description,
+          active: formData.active,
+        }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || `Failed to ${editingOrg ? "update" : "create"} organization`);
+        const detailMsg = Array.isArray(data.details)
+          ? `: ${data.details.join("; ")}`
+          : "";
+        throw new Error(
+          `${data.error || `Failed to ${editingOrg ? "update" : "create"} organization`}${detailMsg}`,
+        );
       }
 
-      toast.success(editingOrg ? "Organization updated successfully" : "Organization created successfully");
+      toast.success(
+        editingOrg
+          ? "Organization updated successfully"
+          : "Organization created successfully",
+      );
       setDialogOpen(false);
       resetForm();
       fetchData();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : `Failed to ${editingOrg ? "update" : "create"} organization`);
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : `Failed to ${editingOrg ? "update" : "create"} organization`,
+      );
     } finally {
       setSaving(false);
     }
@@ -162,11 +219,11 @@ export default function OrganizationsPage() {
   const filteredOrganizations = organizations.filter(
     (org) =>
       org.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      org.type.toLowerCase().includes(searchQuery.toLowerCase())
+      org.type.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
-  const getCountryName = (code: string) => countries.find((c) => c.code === code)?.name || code;
-  const getOrgTypeLabel = (type: string) => ORG_TYPES.find((t) => t.value === type)?.label || type;
+  const getOrgTypeLabel = (type: string) =>
+    ORG_TYPES.find((t) => t.value === type)?.label || type;
 
   return (
     <div data-design-id="organizations-page" className="p-8">
@@ -205,7 +262,9 @@ export default function OrganizationsPage() {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>All Organizations</CardTitle>
-              <CardDescription>{filteredOrganizations.length} organizations</CardDescription>
+              <CardDescription>
+                {filteredOrganizations.length} organizations
+              </CardDescription>
             </div>
             <div className="relative w-64">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -228,10 +287,17 @@ export default function OrganizationsPage() {
             <EmptyState
               icon={<Building2 className="w-8 h-8 text-slate-400" />}
               title="No organizations found"
-              description={isSystemOwner ? "Create your first organization to get started" : "No organizations available"}
+              description={
+                isSystemOwner
+                  ? "Create your first organization to get started"
+                  : "No organizations available"
+              }
               action={
                 isSystemOwner && (
-                  <Button onClick={() => openDialog()} className="bg-sky-600 hover:bg-sky-700">
+                  <Button
+                    onClick={() => openDialog()}
+                    className="bg-sky-600 hover:bg-sky-700"
+                  >
                     <Plus className="w-4 h-4 mr-2" />
                     New Organization
                   </Button>
@@ -246,11 +312,13 @@ export default function OrganizationsPage() {
                 <TableRow>
                   <TableHead>Organization</TableHead>
                   <TableHead>Type</TableHead>
-                  <TableHead>Country</TableHead>
+                  <TableHead>Countries of Operation</TableHead>
                   <TableHead>Projects</TableHead>
                   <TableHead>Users</TableHead>
                   <TableHead>Status</TableHead>
-                  {isSystemOwner && <TableHead className="text-right">Actions</TableHead>}
+                  {isSystemOwner && (
+                    <TableHead className="text-right">Actions</TableHead>
+                  )}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -278,9 +346,45 @@ export default function OrganizationsPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline">{getOrgTypeLabel(org.type)}</Badge>
+                      <Badge variant="outline">
+                        {getOrgTypeLabel(org.type)}
+                      </Badge>
                     </TableCell>
-                    <TableCell>{getCountryName(org.countryCode)}</TableCell>
+                    <TableCell className="max-w-[280px]">
+                      {org.countryScope === "ALL" ? (
+                        <Badge
+                          variant="outline"
+                          className="bg-sky-50 border-sky-300 text-sky-800 flex items-center gap-1 w-fit"
+                          data-design-id={`org-country-all-${org.id}`}
+                        >
+                          <Globe className="w-3 h-3" />
+                          All Countries
+                        </Badge>
+                      ) : org.countryIds.length === 0 ? (
+                        <span
+                          className="text-sm text-amber-600"
+                          data-design-id={`org-country-missing-${org.id}`}
+                        >
+                          No country selected
+                        </span>
+                      ) : (
+                        <span
+                          className="text-sm text-slate-800"
+                          data-design-id={`org-country-list-${org.id}`}
+                          title={formatOrganizationCountries(
+                            org.countryScope,
+                            org.countryIds,
+                            countries,
+                          )}
+                        >
+                          {formatOrganizationCountries(
+                            org.countryScope,
+                            org.countryIds,
+                            countries,
+                          )}
+                        </span>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <div className="flex items-center">
                         <FolderOpen className="w-4 h-4 text-slate-400 mr-1" />
@@ -326,12 +430,17 @@ export default function OrganizationsPage() {
       </Card>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg" data-design-id="organization-dialog">
+        <DialogContent
+          className="max-w-lg max-h-[90vh] overflow-y-auto"
+          data-design-id="organization-dialog"
+        >
           <DialogHeader>
-            <DialogTitle>{editingOrg ? "Edit Organization" : "New Organization"}</DialogTitle>
+            <DialogTitle>
+              {editingOrg ? "Edit Organization" : "New Organization"}
+            </DialogTitle>
             <DialogDescription>
-              {editingOrg 
-                ? "Update the organization details below" 
+              {editingOrg
+                ? "Update the organization details below"
                 : "Add a new partner organization to the platform"}
             </DialogDescription>
           </DialogHeader>
@@ -342,49 +451,69 @@ export default function OrganizationsPage() {
                 <Input
                   id="name"
                   value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, name: e.target.value })
+                  }
                   required
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="type">Type *</Label>
-                  <Select
-                    value={formData.type}
-                    onValueChange={(value) => setFormData({ ...formData, type: value })}
-                  >
-                    <SelectTrigger id="type">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ORG_TYPES.map((type) => (
-                        <SelectItem key={type.value} value={type.value}>
-                          {type.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+              <div className="grid gap-2">
+                <Label htmlFor="type">Type *</Label>
+                <Select
+                  value={formData.type}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, type: value })
+                  }
+                >
+                  <SelectTrigger id="type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ORG_TYPES.map((type) => (
+                      <SelectItem key={type.value} value={type.value}>
+                        {type.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-                <div className="grid gap-2">
-                  <Label htmlFor="countryCode">Country *</Label>
-                  <Select
-                    value={formData.countryCode}
-                    onValueChange={(value) => setFormData({ ...formData, countryCode: value })}
-                  >
-                    <SelectTrigger id="countryCode">
-                      <SelectValue placeholder="Select country" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {countries.map((country) => (
-                        <SelectItem key={country.code} value={country.code}>
-                          {country.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+              <div className="grid gap-2">
+                <Label htmlFor="countries-of-operation">
+                  Countries of Operation *
+                </Label>
+                <p className="text-xs text-slate-500">
+                  Select one or more countries where this organization
+                  operates. Use &ldquo;All Countries&rdquo; for global or
+                  multi-country INGOs.
+                </p>
+                <CountriesOfOperationSelect
+                  id="countries-of-operation"
+                  countries={countries}
+                  scope={formData.countryScope}
+                  selectedCodes={formData.countryIds}
+                  onChange={(scope, selected) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      countryScope: scope,
+                      countryIds: selected,
+                    }))
+                  }
+                  onUpdate={(updater) =>
+                    setFormData((prev) => {
+                      const next = updater({
+                        scope: prev.countryScope,
+                        ids: prev.countryIds,
+                      });
+                      return {
+                        ...prev,
+                        countryScope: next.scope,
+                        countryIds: next.ids,
+                      };
+                    })
+                  }
+                />
               </div>
 
               <div className="grid gap-2">
@@ -393,7 +522,9 @@ export default function OrganizationsPage() {
                   id="website"
                   type="url"
                   value={formData.website}
-                  onChange={(e) => setFormData({ ...formData, website: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, website: e.target.value })
+                  }
                   placeholder="https://..."
                 />
               </div>
@@ -404,7 +535,12 @@ export default function OrganizationsPage() {
                   id="contactEmail"
                   type="email"
                   value={formData.contactEmail}
-                  onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      contactEmail: e.target.value,
+                    })
+                  }
                 />
               </div>
 
@@ -413,7 +549,9 @@ export default function OrganizationsPage() {
                 <Textarea
                   id="description"
                   value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, description: e.target.value })
+                  }
                   rows={3}
                 />
               </div>
@@ -422,14 +560,20 @@ export default function OrganizationsPage() {
                 <Switch
                   id="active"
                   checked={formData.active}
-                  onCheckedChange={(checked) => setFormData({ ...formData, active: checked })}
+                  onCheckedChange={(checked) =>
+                    setFormData({ ...formData, active: checked })
+                  }
                 />
                 <Label htmlFor="active">Active</Label>
               </div>
             </div>
 
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setDialogOpen(false)}
+              >
                 Cancel
               </Button>
               <Button
@@ -437,9 +581,13 @@ export default function OrganizationsPage() {
                 disabled={saving}
                 className="bg-sky-600 hover:bg-sky-700"
               >
-                {saving 
-                  ? (editingOrg ? "Updating..." : "Creating...") 
-                  : (editingOrg ? "Update Organization" : "Create Organization")}
+                {saving
+                  ? editingOrg
+                    ? "Updating..."
+                    : "Creating..."
+                  : editingOrg
+                    ? "Update Organization"
+                    : "Create Organization"}
               </Button>
             </DialogFooter>
           </form>

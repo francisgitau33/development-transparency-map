@@ -202,7 +202,12 @@ export async function POST(request: NextRequest) {
       await Promise.all([
         prisma.referenceCountry.findMany({ where: { active: true } }),
         prisma.referenceSector.findMany({ where: { active: true } }),
-        prisma.organization.findUnique({ where: { id: organizationId } }),
+        prisma.organization.findUnique({
+          where: { id: organizationId },
+          include: {
+            operatingCountries: { select: { countryCode: true } },
+          },
+        }),
         prisma.administrativeArea.findMany(),
         prisma.donor.findMany(),
       ]);
@@ -216,6 +221,24 @@ export async function POST(request: NextRequest) {
 
     const countrySet = new Set(countries.map((c) => c.code));
     const sectorSet = new Set(sectors.map((s) => s.key));
+
+    // Organization country-of-operation scope check. Organizations marked
+    // as "ALL Countries" (countryScope = ALL) can upload projects for any
+    // country. Organizations with countryScope = SELECTED can only upload
+    // projects whose countryCode is in their OrganizationCountry[] set.
+    // Legacy rows with no join rows fall back to organization.countryCode.
+    const orgCountryScope: "ALL" | "SELECTED" =
+      organization.countryScope === "ALL" ? "ALL" : "SELECTED";
+    const orgAllowedCountries = new Set<string>();
+    if (orgCountryScope === "SELECTED") {
+      const joinRows = organization.operatingCountries ?? [];
+      if (joinRows.length > 0) {
+        for (const row of joinRows) orgAllowedCountries.add(row.countryCode);
+      } else if (organization.countryCode) {
+        // Legacy fallback for orgs that pre-date the multi-country backfill.
+        orgAllowedCountries.add(organization.countryCode);
+      }
+    }
 
     // Index admin areas by (countryCode, lowercased name) for O(1) resolution.
     // We deliberately keep inactive rows too so we can emit a distinct
@@ -246,6 +269,20 @@ export async function POST(request: NextRequest) {
 
       if (countryCode && !countrySet.has(countryCode)) {
         errors.push(`Invalid country code: ${countryCode}`);
+      }
+
+      // Cross-check: the row's country must be in the organization's
+      // country-of-operation scope. ALL-scope orgs accept any valid
+      // country; SELECTED-scope orgs accept only their assigned subset.
+      if (
+        countryCode &&
+        countrySet.has(countryCode) &&
+        orgCountryScope === "SELECTED" &&
+        !orgAllowedCountries.has(countryCode)
+      ) {
+        errors.push(
+          `Organization '${organization.name}' is not configured to operate in ${countryName || countryCode}. Update the organization's Countries of Operation or choose "All Countries".`,
+        );
       }
 
       if (sectorKey && !sectorSet.has(sectorKey)) {

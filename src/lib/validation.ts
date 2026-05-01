@@ -398,18 +398,74 @@ export function validateDonor(data: Record<string, unknown>): ValidationResult {
   };
 }
 
+/**
+ * Organization validation (multi-country edition).
+ *
+ * Accepts EITHER the new shape:
+ *   { countryScope: "ALL" | "SELECTED", countryIds: string[] }
+ * OR the legacy shape:
+ *   { countryCode: "XX" }
+ * so older clients / tests keep working. Legacy input is normalised up into
+ * the new shape before validation so the rest of the stack only has to
+ * reason about ONE representation.
+ *
+ * Valid states (enforced):
+ *   - countryScope = "ALL" AND countryIds is empty
+ *   - countryScope = "SELECTED" AND countryIds has ≥ 1 unique country code
+ */
 export function validateOrganization(data: Record<string, unknown>): ValidationResult {
   const errors: string[] = [];
 
   const name = normalizeString(data.name);
   const type = normalizeString(data.type).toUpperCase();
-  const countryCode = normalizeCountryCode(data.countryCode);
 
   if (!name) errors.push("Organization name is required");
   if (!["LNGO", "INGO", "FOUNDATION", "GOVERNMENT", "OTHER"].includes(type)) {
     errors.push("Type must be LNGO, INGO, FOUNDATION, GOVERNMENT, or OTHER");
   }
-  if (!countryCode) errors.push("Country is required");
+
+  // --- Country scope + country ids --------------------------------------
+  const rawScope = normalizeString(data.countryScope).toUpperCase();
+
+  // Legacy inputs: { countryCode: "XX" } → { scope: SELECTED, ids: ["XX"] }.
+  // We treat legacy as a hard fallback only when neither scope nor ids
+  // were supplied, so clients that already pass the new shape are not
+  // silently overridden.
+  const legacyCountryCode = normalizeCountryCode(data.countryCode);
+
+  const rawIds = Array.isArray(data.countryIds) ? data.countryIds : undefined;
+
+  const scope: "ALL" | "SELECTED" = rawScope === "ALL"
+    ? "ALL"
+    : rawScope === "SELECTED"
+      ? "SELECTED"
+      : "SELECTED";
+
+  let countryIds: string[] = [];
+  if (scope === "SELECTED") {
+    if (rawIds && rawIds.length > 0) {
+      countryIds = Array.from(
+        new Set(
+          rawIds
+            .map((v) => normalizeCountryCode(v))
+            .filter((v): v is string => v.length > 0),
+        ),
+      );
+    } else if (legacyCountryCode) {
+      // Legacy single-country payload.
+      countryIds = [legacyCountryCode];
+    }
+
+    if (countryIds.length === 0) {
+      errors.push(
+        "Select at least one country of operation, or choose \"All Countries\".",
+      );
+    }
+  } else {
+    // ALL scope: ignore any ids the client may have sent so the saved state
+    // is always canonical ({ scope: ALL, ids: [] }).
+    countryIds = [];
+  }
 
   return {
     valid: errors.length === 0,
@@ -418,7 +474,12 @@ export function validateOrganization(data: Record<string, unknown>): ValidationR
       ? {
           name,
           type,
-          countryCode,
+          countryScope: scope,
+          countryIds,
+          // Legacy column — kept in sync with the first selected country so
+          // code that still reads Organization.countryCode keeps working.
+          // ALL-scope rows clear the legacy column (it is now nullable).
+          countryCode: scope === "SELECTED" ? countryIds[0] ?? null : null,
           website: normalizeString(data.website) || null,
           contactEmail: normalizeEmail(data.contactEmail) || null,
           description: normalizeString(data.description) || null,

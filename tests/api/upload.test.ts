@@ -221,6 +221,106 @@ describe("POST /api/upload — header / row validation", () => {
     expect(called).not.toContain("evil-other-org");
     expect(res).toBeDefined();
   });
+
+  // -----------------------------------------------------------------------
+  // Multi-country organization cross-check (PRD: "Update implementing
+  // organization setup to support multiple operating countries").
+  // Rows must fail validation when their countryCode is outside the
+  // organisation's selected country scope, unless the org is ALL.
+  // -----------------------------------------------------------------------
+  it("blocks a row whose country is outside the SELECTED org scope", async () => {
+    countryFindMany.mockResolvedValue([{ code: "KE" }, { code: "US" }]);
+    sectorFindMany.mockResolvedValue([{ key: "HEALTH" }]);
+    orgFindUnique.mockResolvedValue({
+      id: "org-1",
+      name: "Kenya-Only NGO",
+      countryScope: "SELECTED",
+      countryCode: "KE",
+      operatingCountries: [{ countryCode: "KE" }],
+    });
+    uploadJobCreate.mockResolvedValue({ id: "job-1" });
+
+    const res = await POST(
+      makeReq({
+        headers: [
+          "title",
+          "countryCode",
+          "sectorKey",
+          "status",
+          "startDate",
+          "latitude",
+          "longitude",
+        ],
+        rows: [
+          {
+            title: "t",
+            countryCode: "US",
+            sectorKey: "HEALTH",
+            status: "ACTIVE",
+            startDate: "2025-01-01",
+            latitude: "-1.2",
+            longitude: "36.8",
+          },
+        ],
+      }),
+    );
+    const body = (await res.json()) as {
+      invalidRows: number;
+      validRows: number;
+      errors: Array<{ errors: string[] }>;
+    };
+    expect(body.invalidRows).toBe(1);
+    expect(body.validRows).toBe(0);
+    expect(body.errors[0].errors.join(" ")).toMatch(
+      /not configured to operate/i,
+    );
+  });
+
+  it("accepts any country when the org scope is ALL", async () => {
+    countryFindMany.mockResolvedValue([{ code: "KE" }, { code: "US" }]);
+    sectorFindMany.mockResolvedValue([{ key: "HEALTH" }]);
+    orgFindUnique.mockResolvedValue({
+      id: "org-1",
+      name: "Global INGO",
+      countryScope: "ALL",
+      countryCode: null,
+      operatingCountries: [],
+    });
+    uploadJobCreate.mockResolvedValue({ id: "job-1" });
+    projectCreateMany.mockResolvedValue({ count: 1 });
+
+    const res = await POST(
+      makeReq({
+        headers: [
+          "title",
+          "countryCode",
+          "sectorKey",
+          "status",
+          "startDate",
+          "latitude",
+          "longitude",
+        ],
+        rows: [
+          {
+            title: "A US project from a global INGO",
+            description: "Pilot programme",
+            countryCode: "US",
+            sectorKey: "HEALTH",
+            status: "ACTIVE",
+            startDate: "2025-01-01",
+            latitude: "38.9",
+            longitude: "-77.0",
+          },
+        ],
+      }),
+    );
+    const body = (await res.json()) as {
+      validRows: number;
+      invalidRows: number;
+    };
+    expect(body.invalidRows).toBe(0);
+    expect(body.validRows).toBe(1);
+  });
 });
 
 describe("POST /api/upload — rate limit", () => {

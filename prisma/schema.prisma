@@ -73,11 +73,39 @@ enum OrganizationType {
   OTHER
 }
 
+// Organization country-of-operation scope.
+// "ALL" represents global / unrestricted coverage — used for INGOs like World
+// Vision, Save the Children, Plan International etc. When set to "ALL" the
+// join table OrganizationCountry MUST be empty for that organization.
+// "SELECTED" means the organization operates in one or more specific
+// countries; OrganizationCountry rows define the selection.
+enum CountryScope {
+  ALL
+  SELECTED
+}
+
 model Organization {
   id           String           @id @default(cuid())
   name         String
   type         OrganizationType
-  countryCode  String
+
+  // Legacy single-country column (PRD: Update implementing organization
+  // setup to support multiple operating countries). Kept nullable for
+  // backward compatibility — historic reads that still reference
+  // `organization.countryCode` continue to work, but the authoritative
+  // source of truth for country-of-operation is now
+  // `countryScope` + `OrganizationCountry[]`.
+  //
+  // On write paths the API mirrors the first selected country back into
+  // this column so that older dashboards / analytics that have not yet
+  // been migrated keep working. A subsequent cleanup migration can drop
+  // the column once all reads have been ported.
+  countryCode  String?
+
+  // Country-of-operation scope — either ALL or SELECTED. Defaulted to
+  // SELECTED so existing rows are interpreted as "operates in one country".
+  countryScope CountryScope     @default(SELECTED)
+
   website      String?
   contactEmail String?
   description  String?
@@ -85,10 +113,34 @@ model Organization {
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
 
-  users      User[]
-  roles      Role[]
-  projects   Project[]
-  uploadJobs UploadJob[]
+  users            User[]
+  roles            Role[]
+  projects         Project[]
+  uploadJobs       UploadJob[]
+  operatingCountries OrganizationCountry[]
+
+  @@index([countryScope])
+}
+
+// Join table: organizations <-> reference countries. Only populated when
+// Organization.countryScope == SELECTED. For ALL-scope organizations this
+// table stays empty — the absence of rows + the scope flag together mean
+// "global coverage".
+//
+// Deliberately NOT cascading on country delete: ReferenceCountry uses soft
+// delete (deletedAt) so we keep the join row pointing at the historical
+// country code, matching the existing pattern used for Project.countryCode.
+model OrganizationCountry {
+  organizationId String
+  countryCode    String
+  createdAt      DateTime @default(now())
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  country      ReferenceCountry @relation(fields: [countryCode], references: [code])
+
+  @@id([organizationId, countryCode])
+  @@index([countryCode])
+  @@index([organizationId])
 }
 
 // Project status
@@ -176,8 +228,9 @@ model ReferenceCountry {
   deletedAt       DateTime?
   deletedByUserId String?
 
-  administrativeAreas AdministrativeArea[]
-  indicators          CountryIndicator[]
+  administrativeAreas  AdministrativeArea[]
+  indicators           CountryIndicator[]
+  organizationCountries OrganizationCountry[]
 
   @@index([deletedAt])
 }
