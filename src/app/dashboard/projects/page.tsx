@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -68,6 +68,13 @@ interface Sector {
 interface Organization {
   id: string;
   name: string;
+  // Multi-country state returned by /api/organizations. ALL-scope orgs
+  // accept any country; SELECTED-scope orgs accept only the ids listed in
+  // `countryIds`. `countryCode` is the legacy scalar kept for back-compat
+  // with single-country orgs that pre-date the backfill.
+  countryScope?: "ALL" | "SELECTED";
+  countryIds?: string[];
+  countryCode?: string | null;
 }
 
 interface AdministrativeArea {
@@ -280,6 +287,73 @@ export default function ProjectsPage() {
   const getCountryName = (code: string) => countries.find((c) => c.code === code)?.name || code;
   const getSector = (key: string) => sectors.find((s) => s.key === key);
   const getSectorName = (key: string) => getSector(key)?.name || key;
+
+  // --------------------------------------------------------------------
+  // Country dropdown scoping (multi-country organizations).
+  //
+  // PRD: "When an organization is selected, filter or constrain the
+  // Country dropdown based on that organization's countryScope."
+  //
+  // Derive the selected organization, its allowed-country set, and the
+  // filtered list we render in the Country <Select>. A `null` set means
+  // "ALL Countries" — every active reference country is allowed.
+  // --------------------------------------------------------------------
+  const selectedOrg = useMemo(
+    () =>
+      organizations.find((o) => o.id === formData.organizationId) ?? null,
+    [organizations, formData.organizationId],
+  );
+
+  const allowedCountryCodes = useMemo<Set<string> | null>(() => {
+    if (!selectedOrg) return null;
+    if (selectedOrg.countryScope === "ALL") return null;
+    const codes = new Set<string>();
+    if (selectedOrg.countryIds && selectedOrg.countryIds.length > 0) {
+      for (const c of selectedOrg.countryIds) codes.add(c);
+      return codes;
+    }
+    // Legacy single-country fallback for rows pre-dating the backfill.
+    if (selectedOrg.countryCode) codes.add(selectedOrg.countryCode);
+    return codes;
+  }, [selectedOrg]);
+
+  const countryOptions = useMemo(() => {
+    if (!selectedOrg) return [] as Country[];
+    if (allowedCountryCodes === null) return countries;
+    return countries.filter((c) => allowedCountryCodes.has(c.code));
+  }, [countries, allowedCountryCodes, selectedOrg]);
+
+  // If the currently selected country becomes invalid after an org switch
+  // (SELECTED-scope org that does not include the picked country), clear
+  // it and tell the user. Runs only when the selection actually has to
+  // change, so it is safe to re-enter the same org without flicker.
+  useEffect(() => {
+    if (!selectedOrg) return;
+    if (!formData.countryCode) return;
+    if (allowedCountryCodes === null) return;
+    if (allowedCountryCodes.has(formData.countryCode)) return;
+    setFormData((prev) => ({
+      ...prev,
+      countryCode: "",
+      // Districts are country-scoped — clearing the country must also
+      // clear the admin-area selection to keep the form consistent.
+      administrativeAreaId: "",
+    }));
+    toast.info(
+      `'${selectedOrg.name}' does not operate in the previously selected country. Please pick a country from its operating list.`,
+    );
+  }, [selectedOrg, allowedCountryCodes, formData.countryCode]);
+
+  // Partner Admins don't see the organization picker — auto-bind the
+  // form to their own org so the Country dropdown can be scoped from
+  // the first render. `organizations` is already server-scoped to their
+  // own org by /api/organizations.
+  useEffect(() => {
+    if (isSystemOwner) return;
+    if (formData.organizationId) return;
+    if (organizations.length === 0) return;
+    setFormData((prev) => ({ ...prev, organizationId: organizations[0].id }));
+  }, [isSystemOwner, organizations, formData.organizationId]);
 
   return (
     <div data-design-id="projects-page" className="p-8">
@@ -534,6 +608,16 @@ export default function ProjectsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
                   <Label htmlFor="countryCode">Country *</Label>
+                  {/*
+                    Country dropdown is constrained to the selected
+                    organization's countries of operation:
+                      - no org selected        → disabled with prompt
+                      - org.scope = ALL        → every active country
+                      - org.scope = SELECTED   → only the org's country set
+                    Matches the CSV upload rule (see
+                    src/app/api/upload/route.ts) so manual + bulk entry
+                    stay in lockstep.
+                  */}
                   <Select
                     value={formData.countryCode}
                     onValueChange={(value) =>
@@ -545,18 +629,71 @@ export default function ProjectsPage() {
                         administrativeAreaId: "",
                       })
                     }
+                    disabled={
+                      !formData.organizationId || countryOptions.length === 0
+                    }
                   >
-                    <SelectTrigger id="countryCode">
-                      <SelectValue placeholder="Select country" />
+                    <SelectTrigger
+                      id="countryCode"
+                      data-design-id="project-country-trigger"
+                      title={
+                        !formData.organizationId
+                          ? "Select an organization first"
+                          : countryOptions.length === 0
+                            ? "This organization has no active countries of operation"
+                            : undefined
+                      }
+                    >
+                      <SelectValue
+                        placeholder={
+                          !formData.organizationId
+                            ? "Select an organization first"
+                            : countryOptions.length === 0
+                              ? "No countries available for this organization"
+                              : "Select country"
+                        }
+                      />
                     </SelectTrigger>
                     <SelectContent>
-                      {countries.map((country) => (
+                      {countryOptions.map((country) => (
                         <SelectItem key={country.code} value={country.code}>
                           {country.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  {!formData.organizationId && (
+                    <p
+                      className="text-xs text-slate-500"
+                      data-design-id="project-country-hint-no-org"
+                    >
+                      Select an organization first to see its countries of
+                      operation.
+                    </p>
+                  )}
+                  {formData.organizationId &&
+                    selectedOrg?.countryScope === "ALL" && (
+                      <p
+                        className="text-xs text-slate-500"
+                        data-design-id="project-country-hint-all"
+                      >
+                        {selectedOrg.name} operates globally — all active
+                        countries are available.
+                      </p>
+                    )}
+                  {formData.organizationId &&
+                    selectedOrg &&
+                    selectedOrg.countryScope !== "ALL" &&
+                    countryOptions.length === 0 && (
+                      <p
+                        className="text-xs text-amber-600"
+                        data-design-id="project-country-hint-empty"
+                      >
+                        {selectedOrg.name} has no active countries of
+                        operation. Update the organization's Countries of
+                        Operation first.
+                      </p>
+                    )}
                 </div>
 
                 <div className="grid gap-2">

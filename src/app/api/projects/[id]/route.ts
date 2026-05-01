@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { validateProject } from "@/lib/validation";
 import { AUDIT_ACTIONS, logAudit } from "@/lib/audit";
+import { isCountryInOrganizationScope } from "@/lib/organization-countries";
 
 const VALID_VISIBILITIES = new Set([
   "DRAFT",
@@ -158,6 +159,7 @@ export async function PUT(
       ? String(data.sectorKey).toUpperCase()
       : undefined;
 
+    let resolvedCountry: { code: string; name: string } | null = null;
     if (countryCode) {
       const country = await prisma.referenceCountry.findUnique({
         where: { code: countryCode },
@@ -168,6 +170,7 @@ export async function PUT(
           { status: 400 },
         );
       }
+      resolvedCountry = { code: country.code, name: country.name };
     }
 
     if (sectorKey) {
@@ -177,6 +180,69 @@ export async function PUT(
       if (!sector || !sector.active) {
         return NextResponse.json(
           { error: "Invalid or inactive sector" },
+          { status: 400 },
+        );
+      }
+    }
+
+    // --------------------------------------------------------------------
+    // Organization country-of-operation cross-check on EDIT.
+    //
+    // PRD: manual project editing must enforce the same rule as CSV
+    // upload and single-project create. The effective organization can
+    // change (SYSTEM_OWNER reassignment — PARTNER_ADMIN was already
+    // pinned to their own org above), and so can the effective country.
+    // We therefore always re-resolve both against the incoming payload
+    // before validating.
+    //
+    // The check runs when either:
+    //   - the country is being changed, OR
+    //   - the organization is being changed.
+    // In both cases we look up the *effective* org + country the row
+    // would end up with and reject 400 if the pair is outside scope.
+    // --------------------------------------------------------------------
+    const effectiveOrgId: string =
+      typeof data.organizationId === "string" && data.organizationId
+        ? String(data.organizationId)
+        : existingProject.organizationId;
+    const effectiveCountryCode: string =
+      resolvedCountry?.code ?? existingProject.countryCode;
+    const orgChanged = effectiveOrgId !== existingProject.organizationId;
+    const countryChanged =
+      resolvedCountry !== null &&
+      resolvedCountry.code !== existingProject.countryCode;
+
+    if (orgChanged || countryChanged) {
+      const organization = await prisma.organization.findUnique({
+        where: { id: effectiveOrgId },
+        include: {
+          operatingCountries: { select: { countryCode: true } },
+        },
+      });
+      if (!organization) {
+        return NextResponse.json(
+          { error: "Selected organization was not found" },
+          { status: 400 },
+        );
+      }
+      if (!isCountryInOrganizationScope(organization, effectiveCountryCode)) {
+        // Prefer the fresh reference-country name if we just looked it up;
+        // otherwise fall back to the bare code (the existing project's
+        // country may itself be soft-deleted — rare but possible).
+        const countryLabel =
+          resolvedCountry?.name ??
+          (
+            await prisma.referenceCountry.findUnique({
+              where: { code: effectiveCountryCode },
+              select: { name: true },
+            })
+          )?.name ??
+          effectiveCountryCode;
+        return NextResponse.json(
+          {
+            error: `Organization '${organization.name}' is not configured to operate in ${countryLabel}. Update the organization's Countries of Operation or choose "All Countries".`,
+            code: "ORGANIZATION_COUNTRY_SCOPE",
+          },
           { status: 400 },
         );
       }

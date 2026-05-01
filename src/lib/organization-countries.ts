@@ -94,6 +94,68 @@ export async function syncOrganizationCountries(
 }
 
 /**
+ * Return the canonical set of country codes an organization is allowed to
+ * operate in. For ALL-scope orgs this is `null` (meaning "any country").
+ * For SELECTED-scope orgs it is the explicit set taken from the join
+ * table, falling back to the legacy scalar `countryCode` for rows that
+ * pre-date the backfill.
+ *
+ * Used by every write path that needs to cross-check a project's
+ * `countryCode` against the org's scope:
+ *   - `POST /api/projects`
+ *   - `PUT /api/projects/:id`
+ *   - `POST /api/upload` (already inlined — the helper formalises the
+ *     contract so the single-project routes stay consistent).
+ *
+ * Returns `null` specifically (not `undefined`, not `[]`) to distinguish
+ * ALL scope from "SELECTED with zero countries" — the latter is an
+ * invalid state that `validateOrganization` already refuses to save, but
+ * callers that might see it (e.g. a legacy row with an unknown
+ * `countryCode`) should treat it the same as an empty set (no country
+ * allowed).
+ */
+export function getAllowedCountryCodesForOrganization(org: {
+  countryScope?: "ALL" | "SELECTED";
+  countryCode?: string | null;
+  operatingCountries?: { countryCode: string }[];
+}): Set<string> | null {
+  if (org.countryScope === "ALL") return null;
+
+  const codes = new Set<string>();
+  if (org.operatingCountries && org.operatingCountries.length > 0) {
+    for (const row of org.operatingCountries) codes.add(row.countryCode);
+    return codes;
+  }
+  // Legacy fallback — data pre-dates the join table backfill.
+  if (org.countryCode) {
+    codes.add(org.countryCode);
+  }
+  return codes;
+}
+
+/**
+ * True iff `countryCode` is inside the organization's country-of-operation
+ * scope. ALL-scope orgs accept any country; SELECTED-scope orgs accept
+ * only their assigned subset (legacy scalar honoured as fallback).
+ *
+ * The comparison is case-insensitive on both sides; callers are still
+ * expected to have normalised `countryCode` via `toUpperCase()` before
+ * the write.
+ */
+export function isCountryInOrganizationScope(
+  org: {
+    countryScope?: "ALL" | "SELECTED";
+    countryCode?: string | null;
+    operatingCountries?: { countryCode: string }[];
+  },
+  countryCode: string,
+): boolean {
+  const allowed = getAllowedCountryCodesForOrganization(org);
+  if (allowed === null) return true;
+  return allowed.has(countryCode.toUpperCase());
+}
+
+/**
  * Intersect the given country codes with the set of ACTIVE,
  * non-soft-deleted ReferenceCountry codes. Returns the accepted subset
  * plus the list of codes that were rejected so the API can report a

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { validateProject } from "@/lib/validation";
 import { AUDIT_ACTIONS, logAudit } from "@/lib/audit";
+import { isCountryInOrganizationScope } from "@/lib/organization-countries";
 
 const VALID_VISIBILITIES = new Set([
   "DRAFT",
@@ -195,6 +196,48 @@ export async function POST(request: NextRequest) {
         { error: "Invalid or inactive sector" },
         { status: 400 },
       );
+    }
+
+    // --------------------------------------------------------------------
+    // Organization country-of-operation cross-check.
+    //
+    // PRD: "Update implementing organization setup to support multiple
+    // operating countries". The upload route (src/app/api/upload/route.ts)
+    // already rejects CSV rows whose countryCode is outside the selected
+    // org's scope; the single-project form must apply the same rule so
+    // users cannot bypass the constraint via the dashboard.
+    //
+    // RBAC notes:
+    //   - PARTNER_ADMIN already had their `organizationId` forced to
+    //     their own org above, so this check cannot be bypassed by
+    //     passing another org id.
+    //   - SYSTEM_OWNER may create for any org, but the scope still
+    //     applies: an INGO that declares it operates only in KE cannot
+    //     receive a US project through the UI for the same reason it
+    //     cannot through the CSV.
+    // --------------------------------------------------------------------
+    if (data.organizationId) {
+      const organization = await prisma.organization.findUnique({
+        where: { id: String(data.organizationId) },
+        include: {
+          operatingCountries: { select: { countryCode: true } },
+        },
+      });
+      if (!organization) {
+        return NextResponse.json(
+          { error: "Selected organization was not found" },
+          { status: 400 },
+        );
+      }
+      if (!isCountryInOrganizationScope(organization, country.code)) {
+        return NextResponse.json(
+          {
+            error: `Organization '${organization.name}' is not configured to operate in ${country.name}. Update the organization's Countries of Operation or choose "All Countries".`,
+            code: "ORGANIZATION_COUNTRY_SCOPE",
+          },
+          { status: 400 },
+        );
+      }
     }
 
     // Reference-data sanity checks for Admin Area and Donor.
