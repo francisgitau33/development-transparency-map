@@ -47,12 +47,35 @@ export async function GET(request: NextRequest) {
     const activeOnly = searchParams.get("activeOnly") === "true";
     const countryFilter = searchParams.get("country")?.trim().toUpperCase();
 
+    // `?scope=directory` is an authenticated, read-only mode used by the
+    // Reports & Development Intelligence page to populate its Organisation
+    // filter dropdown. Both PARTNER_ADMIN and SYSTEM_OWNER see all active
+    // organisations in directory mode — this matches the product rule
+    // that PARTNER_ADMIN reports are platform-wide. It does NOT widen any
+    // write path: organisation create/edit remains SYSTEM_OWNER only, and
+    // the default GET behaviour (below) still narrows PARTNER_ADMIN to
+    // their own organisation for the management UI.
+    const scope = searchParams.get("scope")?.trim().toLowerCase();
+    const directoryMode = scope === "directory";
+
     const where: Record<string, unknown> = {};
     if (activeOnly) {
       where.active = true;
     }
 
-    if (session) {
+    if (directoryMode) {
+      // Directory mode is authenticated-only to avoid unnecessarily
+      // exposing the full org directory anonymously; the public map has
+      // its own, map-specific surface.
+      if (!session) {
+        return NextResponse.json(
+          { error: "Unauthorized" },
+          { status: 401 },
+        );
+      }
+      // No additional PARTNER_ADMIN narrowing — directory must list all
+      // active orgs for report filtering.
+    } else if (session) {
       const user = await prisma.user.findUnique({
         where: { id: session.userId },
         include: { role: true },
@@ -85,6 +108,28 @@ export async function GET(request: NextRequest) {
       },
       orderBy: { name: "asc" },
     });
+
+    // Directory mode returns a minimal, filter-safe projection only.
+    // Suppresses internal user-count metadata and anything not needed to
+    // render a filter option. contactEmail / website / description are
+    // intentionally omitted here even though they are non-sensitive — the
+    // report org filter does not need them.
+    if (directoryMode) {
+      return NextResponse.json({
+        organizations: organizations.map((org) => {
+          const { countryScope, countryIds } = readOrganizationCountries(org);
+          return {
+            id: org.id,
+            name: org.name,
+            type: org.type,
+            countryScope,
+            countryIds,
+            countryCode: org.countryCode,
+            active: org.active,
+          };
+        }),
+      });
+    }
 
     return NextResponse.json({
       organizations: organizations.map(serializeOrganization),

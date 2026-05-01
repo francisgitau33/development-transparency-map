@@ -6,6 +6,7 @@ import {
   buildProjectFilterWhere,
   parseProjectFilterParams,
 } from "@/lib/project-filters";
+import { buildReportOrgVisibilityScope } from "@/lib/report-scope";
 
 export async function GET(request: NextRequest) {
   try {
@@ -18,27 +19,25 @@ export async function GET(request: NextRequest) {
     const filterParams = parseProjectFilterParams(searchParams);
     const { where: filterWhere } = buildProjectFilterWhere(filterParams);
 
-    // Access control + org scoping. Partner Admins are locked to their own
-    // org regardless of query. System Owners may pass organizationId to scope
-    // a view; otherwise they see everything.
-    let orgScope: Prisma.ProjectWhereInput = {};
+    // Access control + role-aware read scope. See `src/lib/report-scope.ts`
+    // for the full rule. Summary:
+    //   - SYSTEM_OWNER  → platform-wide; honours ?organizationId=.
+    //   - PARTNER_ADMIN → platform-wide; own-org at any visibility + other
+    //                     orgs' PUBLISHED only; honours ?organizationId=.
+    //   - Unauthenticated → defensive: PUBLISHED only (report routes
+    //                       typically 401 before reaching here).
+    let orgScope: Prisma.ProjectWhereInput;
     if (session) {
       const user = await prisma.user.findUnique({
         where: { id: session.userId },
         include: { role: true },
       });
-
-      if (user?.role?.role === "PARTNER_ADMIN" && user.role.organizationId) {
-        orgScope = { organizationId: user.role.organizationId };
-      } else if (organizationId) {
-        orgScope = { organizationId };
-      }
+      orgScope = buildReportOrgVisibilityScope(user, organizationId);
     } else {
-      // Unauthenticated callers only ever see PUBLISHED projects.
-      orgScope = { visibility: "PUBLISHED" };
+      orgScope = buildReportOrgVisibilityScope(null, organizationId);
     }
 
-    // Compose: AND of filter params + org scope.
+    // Compose: AND of filter params + role scope.
     const where: Prisma.ProjectWhereInput = {
       AND: [filterWhere, orgScope],
     };

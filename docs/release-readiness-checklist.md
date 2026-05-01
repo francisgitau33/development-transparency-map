@@ -88,13 +88,35 @@ availability.
 - [ ] Click a marker — the popup shows the project's public fields only.
 
 ### Role scoping (defense-in-depth)
+
+Reports are a **read** surface. Since 2026-05-01 the RBAC split is:
+
+| Surface | SYSTEM_OWNER | PARTNER_ADMIN |
+|---|---|---|
+| Reports & Development Intelligence (read) | Platform-wide; may narrow via `?organizationId=` | Platform-wide; own-org at any visibility **OR** other orgs' `PUBLISHED` only; may narrow via `?organizationId=` |
+| Project create / edit / delete (write) | All orgs | Own-org only |
+| CSV upload (write) | All orgs | Own-org only |
+| Organization edit / user mgmt / CMS / audit | Full | Blocked |
+
+Authoritative helper: `src/lib/report-scope.ts` (`buildReportOrgVisibilityScope`). Route wiring: `/api/analytics`, `/api/reports/development-analytics`, `/api/reports/funding-cliffs`, `/api/reports/spatial-vulnerability`. Test coverage: `tests/report-scope.test.ts`, `tests/api/analytics.test.ts`, `tests/api/reports.test.ts`.
+
 - [ ] Log in as a PARTNER_ADMIN and open `/dashboard/reports`. Confirm the
-      widgets show their organisation's data only (not platform-wide).
+      widgets show **platform-wide** data by default (not just the
+      partner's own organisation), and the Organisation filter lists more
+      than the partner's own org (populated via
+      `/api/organizations?scope=directory`).
 - [ ] Repeat with a SYSTEM_OWNER account. Confirm widgets show platform-
       wide data by default.
-- [ ] As PARTNER_ADMIN, attempt to pass `?organizationId=OTHER_ORG` on the
-      reports URLs. Data returned MUST remain the partner's own org.
-      (Route code enforces this; test coverage: `tests/api/reports.test.ts`.)
+- [ ] As PARTNER_ADMIN, pick a peer organisation in the report
+      Organisation filter. The aggregates MUST reflect only that peer's
+      **PUBLISHED** projects — never DRAFT / PENDING_REVIEW / UNPUBLISHED.
+- [ ] As PARTNER_ADMIN, confirm own-organisation DRAFT / PENDING_REVIEW
+      rows DO appear in "All organisations" and in "My organisation"
+      filter selections.
+- [ ] As PARTNER_ADMIN, attempt project create / edit with
+      `organizationId` of a peer org (via the API). Must still be 403.
+      Write scope is unchanged.
+- [ ] As PARTNER_ADMIN, open `/dashboard/audit` directly. Still 403.
 
 ### Uploads
 - [ ] Upload a CSV with missing required columns — server rejects with

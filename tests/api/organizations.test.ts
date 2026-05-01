@@ -226,6 +226,120 @@ describe("GET /api/organizations", () => {
     })?.where;
     expect(whereArg?.id).toBe("p-org");
   });
+
+  // ---------------------------------------------------------------------
+  // scope=directory — authenticated, minimal, platform-wide read mode
+  // used by the Reports & Development Intelligence page's org filter.
+  // See src/app/api/organizations/route.ts and src/lib/report-scope.ts.
+  // ---------------------------------------------------------------------
+
+  it("scope=directory returns 401 for anonymous callers", async () => {
+    mockAnonymous();
+    const res = await listGet(
+      makeReq("http://x/api/organizations?scope=directory"),
+    );
+    expect(res.status).toBe(401);
+    expect(orgFindMany).not.toHaveBeenCalled();
+  });
+
+  it("scope=directory lists ALL active orgs for PARTNER_ADMIN (not just own)", async () => {
+    mockPartnerAdmin("p-org");
+    orgFindMany.mockResolvedValue([
+      {
+        id: "p-org",
+        name: "Partner Org",
+        type: "LNGO",
+        countryScope: "SELECTED",
+        countryCode: "KE",
+        website: "https://partner",
+        contactEmail: "c@partner",
+        description: "desc",
+        active: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        operatingCountries: [{ countryCode: "KE" }],
+        _count: { projects: 2, users: 1 },
+      },
+      {
+        id: "peer-org",
+        name: "Peer Org",
+        type: "INGO",
+        countryScope: "ALL",
+        countryCode: null,
+        website: "https://peer",
+        contactEmail: "c@peer",
+        description: "peer desc",
+        active: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        operatingCountries: [],
+        _count: { projects: 7, users: 3 },
+      },
+    ]);
+
+    const res = await listGet(
+      makeReq("http://x/api/organizations?activeOnly=true&scope=directory"),
+    );
+    expect(res.status).toBe(200);
+
+    // The where argument must NOT narrow to the partner's own org id in
+    // directory mode.
+    const whereArg = (orgFindMany.mock.calls[0]?.[0] as {
+      where: { id?: string; active?: boolean };
+    })?.where;
+    expect(whereArg?.id).toBeUndefined();
+    expect(whereArg?.active).toBe(true);
+
+    const body = (await res.json()) as {
+      organizations: Array<Record<string, unknown>>;
+    };
+    expect(body.organizations).toHaveLength(2);
+    // Minimal, filter-safe projection — no user counts, website, contact
+    // email, description, or createdAt.
+    for (const row of body.organizations) {
+      expect(Object.keys(row).sort()).toEqual(
+        [
+          "active",
+          "countryCode",
+          "countryIds",
+          "countryScope",
+          "id",
+          "name",
+          "type",
+        ].sort(),
+      );
+      expect(row).not.toHaveProperty("contactEmail");
+      expect(row).not.toHaveProperty("website");
+      expect(row).not.toHaveProperty("description");
+      expect(row).not.toHaveProperty("_count");
+    }
+  });
+
+  it("scope=directory works for SYSTEM_OWNER and is an alias for platform-wide listing", async () => {
+    mockSystemOwner();
+    orgFindMany.mockResolvedValue([]);
+    const res = await listGet(
+      makeReq("http://x/api/organizations?scope=directory"),
+    );
+    expect(res.status).toBe(200);
+    const whereArg = (orgFindMany.mock.calls[0]?.[0] as {
+      where: { id?: string };
+    })?.where;
+    expect(whereArg?.id).toBeUndefined();
+  });
+
+  it("default PARTNER_ADMIN GET is unchanged — still narrows to own org", async () => {
+    // Regression guard: the management page still receives own-org only.
+    mockPartnerAdmin("p-org");
+    orgFindMany.mockResolvedValue([]);
+
+    await listGet(makeReq("http://x/api/organizations"));
+
+    const whereArg = (orgFindMany.mock.calls[0]?.[0] as {
+      where: { id?: string };
+    })?.where;
+    expect(whereArg?.id).toBe("p-org");
+  });
 });
 
 // ---------------------------------------------------------------------------

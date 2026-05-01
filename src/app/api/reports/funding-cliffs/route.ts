@@ -13,8 +13,11 @@
  *
  * Access control:
  *   - Unauthenticated callers → 401.
- *   - PARTNER_ADMIN → always scoped to their own organisation.
- *   - SYSTEM_OWNER → may pass ?organizationId= to scope; otherwise platform-wide.
+ *   - PARTNER_ADMIN → platform-wide read access to reportable data (own
+ *     organisation at any visibility + other organisations' PUBLISHED
+ *     projects). Write/manage scope is unchanged and remains own-org only.
+ *     See `src/lib/report-scope.ts` for the authoritative rule.
+ *   - SYSTEM_OWNER → may pass ?organizationId= to narrow; otherwise platform-wide.
  *
  * Filters (all optional, parsed via the shared helper):
  *   countryCode, administrativeAreaId, sectorKey, status, organizationId,
@@ -55,6 +58,7 @@ import {
   buildProjectFilterWhere,
   parseProjectFilterParams,
 } from "@/lib/project-filters";
+import { buildReportOrgVisibilityScope } from "@/lib/report-scope";
 import {
   addMonths,
   buildCliffRow,
@@ -170,14 +174,13 @@ export async function GET(request: NextRequest) {
     today.setUTCHours(0, 0, 0, 0);
     const windowEnd = addMonths(today, windowMonths);
 
-    // Role scoping (identical to dev-analytics endpoint).
-    let orgScope: Prisma.ProjectWhereInput = {};
-    if (user.role.role === "PARTNER_ADMIN" && user.role.organizationId) {
-      orgScope = { organizationId: user.role.organizationId };
-    } else if (user.role.role === "SYSTEM_OWNER") {
-      const requestedOrg = searchParams.get("organizationId");
-      if (requestedOrg) orgScope = { organizationId: requestedOrg };
-    }
+    // Role-aware read scope (identical to dev-analytics endpoint).
+    // Reports are a read surface only — PARTNER_ADMIN is NOT locked to
+    // their own org. See `src/lib/report-scope.ts`.
+    const orgScope = buildReportOrgVisibilityScope(
+      user,
+      searchParams.get("organizationId"),
+    );
 
     const where: Prisma.ProjectWhereInput = {
       AND: [filterWhere, orgScope],
@@ -730,10 +733,9 @@ export async function GET(request: NextRequest) {
       administrativeAreaId: filterParams.administrativeAreaId ?? null,
       sectorKey: filterParams.sectorKey ?? null,
       status: filterParams.status ?? null,
-      organizationId:
-        user.role.role === "PARTNER_ADMIN"
-          ? user.role.organizationId ?? null
-          : filterParams.organizationId ?? null,
+      // Echo the filter the client actually selected (if any). Role read
+      // scope is applied in Prisma via buildReportOrgVisibilityScope.
+      organizationId: filterParams.organizationId ?? null,
       donorId: filterParams.donorId ?? null,
       activeDuringYear: filterParams.activeDuringYear ?? null,
       budgetTier: filterParams.budgetTier ?? null,

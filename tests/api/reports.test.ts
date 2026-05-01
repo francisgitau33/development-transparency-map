@@ -1,11 +1,17 @@
 /**
- * API tests for the three reports endpoints (see Prompt 6 · Part D.4).
+ * API tests for the three reports endpoints.
  *
- * We focus on the ACCESS CONTROL + ORG SCOPING contract:
- *   - Unauthenticated → 401.
- *   - PARTNER_ADMIN's Prisma query is scoped to their own organisation.
- *   - SYSTEM_OWNER sees platform-wide data by default and can scope via
- *     ?organizationId=.
+ * Product rule (updated 2026-05-01 — see `src/lib/report-scope.ts`):
+ *   Reports are a READ surface only. PARTNER_ADMIN is NOT forcibly scoped
+ *   to their own organisation. Instead:
+ *     - SYSTEM_OWNER  → platform-wide; may narrow via ?organizationId=.
+ *     - PARTNER_ADMIN → platform-wide; own-org at ANY visibility + other
+ *                       orgs' PUBLISHED only; may narrow via
+ *                       ?organizationId=.
+ *     - Anonymous     → 401.
+ *   Write scope (project create/edit/delete, CSV upload) remains own-org
+ *   only and is covered by tests/api/projects.test.ts and
+ *   tests/api/upload.test.ts.
  *
  * We do NOT re-test the heavy aggregation logic here — pure helpers are
  * covered by src/lib/funding-cliff.test.ts and
@@ -79,6 +85,52 @@ function collectOrgIds(where: unknown): string[] {
   return seen;
 }
 
+/**
+ * Collect every `visibility` constraint found anywhere in a (possibly
+ * nested) Prisma where clause — used to verify the PARTNER_ADMIN
+ * visibility guard is present.
+ */
+function collectVisibilities(where: unknown): string[] {
+  const seen: string[] = [];
+  const walk = (n: unknown) => {
+    if (!n || typeof n !== "object") return;
+    const obj = n as Record<string, unknown>;
+    if (typeof obj.visibility === "string") seen.push(obj.visibility);
+    for (const key of ["AND", "OR", "NOT"]) {
+      const arr = obj[key];
+      if (Array.isArray(arr)) for (const child of arr) walk(child);
+    }
+  };
+  walk(where);
+  return seen;
+}
+
+/**
+ * Assert the PARTNER_ADMIN read-scope guard is present in the where
+ * tree: there must be an OR-branch that permits own-org ANY visibility
+ * AND another that permits PUBLISHED from any org. We assert both via
+ * the presence of the own-org id and the PUBLISHED visibility anywhere
+ * in the tree — the helper composes them as an OR pair so any route
+ * that uses `buildReportOrgVisibilityScope` will satisfy both.
+ */
+function assertPartnerReadGuard(
+  where: unknown,
+  ownOrgId: string,
+): void {
+  const ids = collectOrgIds(where);
+  const vis = collectVisibilities(where);
+  if (!ids.includes(ownOrgId)) {
+    throw new Error(
+      `Expected own-org id "${ownOrgId}" in where tree; got ids=${JSON.stringify(ids)}`,
+    );
+  }
+  if (!vis.includes("PUBLISHED")) {
+    throw new Error(
+      `Expected visibility "PUBLISHED" guard in where tree; got vis=${JSON.stringify(vis)}`,
+    );
+  }
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   projectFindMany.mockResolvedValue([]);
@@ -109,7 +161,29 @@ describe("GET /api/reports/development-analytics", () => {
     expect(res.status).toBe(401);
   });
 
-  it("scopes PARTNER_ADMIN queries to their own organisation, regardless of override", async () => {
+  it("applies platform-wide PARTNER_ADMIN read guard by default (own-org any visibility + PUBLISHED elsewhere)", async () => {
+    mockGetSession.mockResolvedValue({
+      userId: "partner-1",
+      email: "p@example.com",
+      displayName: "P",
+    });
+    userFindUnique.mockResolvedValue({
+      id: "partner-1",
+      role: { role: "PARTNER_ADMIN", organizationId: "org-partner" },
+    });
+
+    const res = await analyticsGet(
+      makeReq("https://app.example/api/reports/development-analytics"),
+    );
+    expect(res.status).toBe(200);
+    // Partner's own-org must appear (own-org branch of the OR) AND the
+    // PUBLISHED visibility guard must appear (peer-org branch). This
+    // proves cross-org drafts are excluded without forcibly locking the
+    // partner to only their own organisation.
+    assertPartnerReadGuard(getProjectWhere(), "org-partner");
+  });
+
+  it("PARTNER_ADMIN: ?organizationId= narrows within the visibility guard (cross-org drafts stay excluded)", async () => {
     mockGetSession.mockResolvedValue({
       userId: "partner-1",
       email: "p@example.com",
@@ -122,16 +196,19 @@ describe("GET /api/reports/development-analytics", () => {
 
     const res = await analyticsGet(
       makeReq(
-        "https://app.example/api/reports/development-analytics?organizationId=evil-override",
+        "https://app.example/api/reports/development-analytics?organizationId=peer-org",
       ),
     );
     expect(res.status).toBe(200);
-    const ids = collectOrgIds(getProjectWhere());
-    // The partner's own org MUST appear in the WHERE tree — this is the
-    // authoritative role-scope constraint. The override may also appear in
-    // filter-where (defense-in-depth: empty intersection). What matters is
-    // that the partner's org is enforced.
-    expect(ids).toContain("org-partner");
+    const where = getProjectWhere();
+    // Narrowed to the requested peer org…
+    expect(collectOrgIds(where)).toContain("peer-org");
+    // …but the PUBLISHED visibility guard must still be in the tree so
+    // peer-org drafts are never exposed to the partner.
+    expect(collectVisibilities(where)).toContain("PUBLISHED");
+    // And the partner's own-org still appears as part of the OR, so the
+    // helper shape is preserved.
+    expect(collectOrgIds(where)).toContain("org-partner");
   });
 
   it("returns platform-wide data for SYSTEM_OWNER by default (no org scope)", async () => {
@@ -185,7 +262,23 @@ describe("GET /api/reports/spatial-vulnerability", () => {
     expect(res.status).toBe(401);
   });
 
-  it("locks PARTNER_ADMIN to their own organisation", async () => {
+  it("applies PARTNER_ADMIN platform-wide read guard (own-org + PUBLISHED elsewhere)", async () => {
+    mockGetSession.mockResolvedValue({
+      userId: "partner-1",
+      email: "p@example.com",
+      displayName: "P",
+    });
+    userFindUnique.mockResolvedValue({
+      id: "partner-1",
+      role: { role: "PARTNER_ADMIN", organizationId: "org-partner" },
+    });
+    await spatialGet(
+      makeReq("https://app.example/api/reports/spatial-vulnerability"),
+    );
+    assertPartnerReadGuard(getProjectWhere(), "org-partner");
+  });
+
+  it("PARTNER_ADMIN ?organizationId= keeps visibility guard (spatial-vulnerability)", async () => {
     mockGetSession.mockResolvedValue({
       userId: "partner-1",
       email: "p@example.com",
@@ -197,10 +290,12 @@ describe("GET /api/reports/spatial-vulnerability", () => {
     });
     await spatialGet(
       makeReq(
-        "https://app.example/api/reports/spatial-vulnerability?organizationId=evil",
+        "https://app.example/api/reports/spatial-vulnerability?organizationId=peer-org",
       ),
     );
-    expect(collectOrgIds(getProjectWhere())).toContain("org-partner");
+    const where = getProjectWhere();
+    expect(collectOrgIds(where)).toContain("peer-org");
+    expect(collectVisibilities(where)).toContain("PUBLISHED");
   });
 
   it("includes population-weighted response fields for SYSTEM_OWNER (Prompt 7 · Part F)", async () => {
@@ -354,7 +449,23 @@ describe("GET /api/reports/funding-cliffs", () => {
     expect(res.status).toBe(401);
   });
 
-  it("locks PARTNER_ADMIN to their own organisation", async () => {
+  it("applies PARTNER_ADMIN platform-wide read guard (funding-cliffs)", async () => {
+    mockGetSession.mockResolvedValue({
+      userId: "partner-1",
+      email: "p@example.com",
+      displayName: "P",
+    });
+    userFindUnique.mockResolvedValue({
+      id: "partner-1",
+      role: { role: "PARTNER_ADMIN", organizationId: "org-partner" },
+    });
+    await cliffGet(
+      makeReq("https://app.example/api/reports/funding-cliffs"),
+    );
+    assertPartnerReadGuard(getProjectWhere(), "org-partner");
+  });
+
+  it("PARTNER_ADMIN ?organizationId= keeps visibility guard (funding-cliffs)", async () => {
     mockGetSession.mockResolvedValue({
       userId: "partner-1",
       email: "p@example.com",
@@ -366,13 +477,15 @@ describe("GET /api/reports/funding-cliffs", () => {
     });
     await cliffGet(
       makeReq(
-        "https://app.example/api/reports/funding-cliffs?organizationId=evil",
+        "https://app.example/api/reports/funding-cliffs?organizationId=peer-org",
       ),
     );
-    expect(collectOrgIds(getProjectWhere())).toContain("org-partner");
+    const where = getProjectWhere();
+    expect(collectOrgIds(where)).toContain("peer-org");
+    expect(collectVisibilities(where)).toContain("PUBLISHED");
   });
 
-  it("honours ?organizationId= for SYSTEM_OWNER", async () => {
+  it("SYSTEM_OWNER sees no forced visibility guard and can narrow via ?organizationId=", async () => {
     mockGetSession.mockResolvedValue({
       userId: "owner-1",
       email: "o@example.com",
@@ -387,6 +500,9 @@ describe("GET /api/reports/funding-cliffs", () => {
         "https://app.example/api/reports/funding-cliffs?organizationId=target-org",
       ),
     );
-    expect(collectOrgIds(getProjectWhere())).toContain("target-org");
+    const where = getProjectWhere();
+    expect(collectOrgIds(where)).toContain("target-org");
+    // No PARTNER_ADMIN-style PUBLISHED guard is injected for SYSTEM_OWNER.
+    expect(collectVisibilities(where)).toEqual([]);
   });
 });

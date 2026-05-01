@@ -9,9 +9,12 @@
  *
  * Access control:
  *   - Unauthenticated callers → 401.
- *   - PARTNER_ADMIN → always scoped to their own organisation.
- *   - SYSTEM_OWNER → may pass ?organizationId= to scope a view; otherwise
- *     sees every project on the platform.
+ *   - PARTNER_ADMIN → platform-wide read access to reportable data (own
+ *     organisation at any visibility + other organisations' PUBLISHED
+ *     projects). Write/manage scope is unchanged and remains own-org only.
+ *     See `src/lib/report-scope.ts` for the authoritative rule.
+ *   - SYSTEM_OWNER → may pass ?organizationId= to narrow; otherwise sees
+ *     every project on the platform.
  *
  * Filters (all optional, parsed via shared helper in `lib/project-filters`):
  *   countryCode, administrativeAreaId, sectorKey, status, organizationId,
@@ -50,6 +53,7 @@ import {
   buildProjectFilterWhere,
   parseProjectFilterParams,
 } from "@/lib/project-filters";
+import { buildReportOrgVisibilityScope } from "@/lib/report-scope";
 
 const UNKNOWN_DONOR = "Unknown / Not Provided";
 const MATRIX_TOP_N = 10;
@@ -104,14 +108,14 @@ export async function GET(request: NextRequest) {
     const filterParams = parseProjectFilterParams(searchParams);
     const { where: filterWhere } = buildProjectFilterWhere(filterParams);
 
-    // Org scoping: Partner Admins are locked to their own org.
-    let orgScope: Prisma.ProjectWhereInput = {};
-    if (user.role.role === "PARTNER_ADMIN" && user.role.organizationId) {
-      orgScope = { organizationId: user.role.organizationId };
-    } else if (user.role.role === "SYSTEM_OWNER") {
-      const requestedOrg = searchParams.get("organizationId");
-      if (requestedOrg) orgScope = { organizationId: requestedOrg };
-    }
+    // Role-aware read scope. Reports are a read surface only — PARTNER_ADMIN
+    // is NOT locked to their own org here. Write scope (project create/edit/
+    // delete, CSV upload) remains own-org-only and is enforced in the
+    // corresponding write routes. See `src/lib/report-scope.ts`.
+    const orgScope = buildReportOrgVisibilityScope(
+      user,
+      searchParams.get("organizationId"),
+    );
 
     const where: Prisma.ProjectWhereInput = {
       AND: [filterWhere, orgScope],
@@ -797,10 +801,10 @@ export async function GET(request: NextRequest) {
       administrativeAreaId: filterParams.administrativeAreaId ?? null,
       sectorKey: filterParams.sectorKey ?? null,
       status: filterParams.status ?? null,
-      organizationId:
-        user.role.role === "PARTNER_ADMIN"
-          ? user.role.organizationId
-          : filterParams.organizationId ?? null,
+      // Echo the filter the client actually selected (if any). No forced
+      // override for PARTNER_ADMIN — the read-scope guard is applied in
+      // Prisma, not in the echoed filter state.
+      organizationId: filterParams.organizationId ?? null,
       donorId: filterParams.donorId ?? null,
       activeDuringYear: filterParams.activeDuringYear ?? null,
       budgetTier: filterParams.budgetTier ?? null,

@@ -1443,7 +1443,12 @@ export default function ReportsPage() {
         const [cRes, sRes, oRes, aRes, dRes] = await Promise.all([
           fetch("/api/reference/countries?activeOnly=true"),
           fetch("/api/reference/sectors?activeOnly=true"),
-          fetch("/api/organizations?activeOnly=true"),
+          // `scope=directory` returns all active organisations regardless
+          // of the viewer's role, so PARTNER_ADMIN can filter their
+          // platform-wide reports by any organisation. The default
+          // /api/organizations behaviour (own-org for PARTNER_ADMIN) is
+          // still used by the Organisations management page.
+          fetch("/api/organizations?activeOnly=true&scope=directory"),
           fetch("/api/reference/administrative-areas?activeOnly=true"),
           fetch("/api/reference/donors?activeOnly=true"),
         ]);
