@@ -18,6 +18,8 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const activeOnlyParam = searchParams.get("activeOnly");
+    const includeDeletedParam =
+      searchParams.get("includeDeleted") === "true";
 
     const session = await getSession();
     let isSystemOwner = false;
@@ -33,6 +35,13 @@ export async function GET(request: NextRequest) {
 
     const where: Prisma.DonorWhereInput = {};
     if (activeOnly) where.active = true;
+
+    // Soft-deleted rows (`deletedAt != null`) are always hidden from
+    // non-system-owner callers. A SYSTEM_OWNER may opt in with
+    // `includeDeleted=true` to audit or reactivate rows in future.
+    if (!(isSystemOwner && includeDeletedParam)) {
+      where.deletedAt = null;
+    }
 
     const donors = await prisma.donor.findMany({
       where,

@@ -21,6 +21,8 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const activeOnlyParam = searchParams.get("activeOnly");
     const countryCode = searchParams.get("countryCode");
+    const includeDeletedParam =
+      searchParams.get("includeDeleted") === "true";
 
     const session = await getSession();
     let isSystemOwner = false;
@@ -39,6 +41,12 @@ export async function GET(request: NextRequest) {
     const where: Prisma.AdministrativeAreaWhereInput = {};
     if (activeOnly) where.active = true;
     if (countryCode) where.countryCode = countryCode.toUpperCase();
+
+    // Soft-deleted rows (`deletedAt != null`) are always hidden from
+    // non-system-owners. SYSTEM_OWNERs may opt in with `includeDeleted=true`.
+    if (!(isSystemOwner && includeDeletedParam)) {
+      where.deletedAt = null;
+    }
 
     const administrativeAreas = await prisma.administrativeArea.findMany({
       where,
@@ -96,7 +104,8 @@ export async function POST(request: NextRequest) {
     const country = await prisma.referenceCountry.findUnique({
       where: { code: validation.normalizedData?.countryCode as string },
     });
-    if (!country) {
+    if (!country || country.deletedAt) {
+      // Soft-deleted countries are treated as removed.
       return NextResponse.json(
         { error: "Country not found" },
         { status: 400 },

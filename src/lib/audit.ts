@@ -17,6 +17,13 @@ export const AUDIT_ACTIONS = {
   PROJECT_VISIBILITY_CHANGED: "PROJECT_VISIBILITY_CHANGED",
   UPLOAD_COMPLETED: "UPLOAD_COMPLETED",
   CMS_UPDATED: "CMS_UPDATED",
+  // Reference-data soft/hard delete by SYSTEM_OWNER.
+  // Always accompanied by `entityType` = "ReferenceCountry" |
+  // "AdministrativeArea" | "Donor" | "ReferenceSector" and a payload that
+  // includes the display name, the mode ("soft" | "hard") and any blocked
+  // dependency counts. See src/lib/reference-delete.ts.
+  REFERENCE_DELETED: "REFERENCE_DELETED",
+  REFERENCE_DELETE_BLOCKED: "REFERENCE_DELETE_BLOCKED",
   SYSTEM_OWNER_SEED_VERIFIED: "SYSTEM_OWNER_SEED_VERIFIED",
 } as const;
 

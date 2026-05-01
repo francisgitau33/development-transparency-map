@@ -7,10 +7,30 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const activeOnly = searchParams.get("activeOnly") === "true";
+    const includeDeletedParam =
+      searchParams.get("includeDeleted") === "true";
+
+    // Only SYSTEM_OWNERs may opt in to seeing soft-deleted rows. Every other
+    // caller — including PARTNER_ADMINs, public map visitors, and upload
+    // tooling — always has `deletedAt != null` rows hidden.
+    let canIncludeDeleted = false;
+    if (includeDeletedParam) {
+      const session = await getSession();
+      if (session) {
+        const user = await prisma.user.findUnique({
+          where: { id: session.userId },
+          include: { role: true },
+        });
+        canIncludeDeleted = user?.role?.role === "SYSTEM_OWNER";
+      }
+    }
 
     const where: Record<string, unknown> = {};
     if (activeOnly) {
       where.active = true;
+    }
+    if (!canIncludeDeleted) {
+      where.deletedAt = null;
     }
 
     const countries = await prisma.referenceCountry.findMany({
@@ -108,6 +128,20 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json(
         { error: "Country code is required" },
         { status: 400 }
+      );
+    }
+
+    // Guard: soft-deleted rows cannot be edited. Restore is intentionally
+    // not exposed in the current UI — a deleted country should be treated
+    // as removed. Trying to PUT on one returns 404 so the CMS surfaces
+    // "not found" instead of silently resurrecting data.
+    const existing = await prisma.referenceCountry.findUnique({
+      where: { code: code.toUpperCase() },
+    });
+    if (!existing || existing.deletedAt) {
+      return NextResponse.json(
+        { error: "Country not found" },
+        { status: 404 }
       );
     }
 

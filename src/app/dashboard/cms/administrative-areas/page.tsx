@@ -40,9 +40,17 @@ import {
 } from "@/components/ui/table";
 import { LoadingState } from "@/components/shared/LoadingState";
 import { ErrorState } from "@/components/shared/ErrorState";
+import { DeleteReferenceDialog } from "@/components/shared/DeleteReferenceDialog";
 import { useAuth } from "@/lib/auth-context";
 import { toast } from "sonner";
-import { Plus, ArrowLeft, Pencil, Map as MapIcon, Search } from "lucide-react";
+import {
+  Plus,
+  ArrowLeft,
+  Pencil,
+  Map as MapIcon,
+  Search,
+  Trash2,
+} from "lucide-react";
 
 interface Country {
   code: string;
@@ -108,6 +116,11 @@ export default function AdministrativeAreasCMSPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<AdministrativeArea | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // Delete confirmation — target row drives the DeleteReferenceDialog.
+  // SYSTEM_OWNER-only per RBAC guard on this page + the DELETE API.
+  const [deleteTarget, setDeleteTarget] =
+    useState<AdministrativeArea | null>(null);
 
   const [formData, setFormData] = useState<AdministrativeAreaForm>({
     name: "",
@@ -456,8 +469,20 @@ export default function AdministrativeAreasCMSPage() {
                         variant="ghost"
                         size="sm"
                         onClick={() => openDialog(area)}
+                        data-design-id={`admin-area-edit-${area.id}`}
+                        title="Edit administrative area"
                       >
                         <Pencil className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setDeleteTarget(area)}
+                        data-design-id={`admin-area-delete-${area.id}`}
+                        title="Delete administrative area"
+                        className="text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                      >
+                        <Trash2 className="w-4 h-4" />
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -702,6 +727,30 @@ export default function AdministrativeAreasCMSPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/*
+        Destructive-confirmation dialog for administrative-area delete.
+        Blocked with project counts when any Project.administrativeAreaId
+        still references this area (see src/lib/reference-delete.ts).
+      */}
+      <DeleteReferenceDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+        kindLabel="administrative area"
+        name={deleteTarget?.name ?? ""}
+        deleteUrl={
+          deleteTarget
+            ? `/api/reference/administrative-areas/${deleteTarget.id}`
+            : ""
+        }
+        designId="admin-area-delete-dialog"
+        onSuccess={() => {
+          setDeleteTarget(null);
+          fetchData();
+        }}
+      />
     </div>
   );
 }

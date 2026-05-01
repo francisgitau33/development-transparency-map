@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { LoadingState } from "@/components/shared/LoadingState";
 import { ErrorState } from "@/components/shared/ErrorState";
+import { DeleteReferenceDialog } from "@/components/shared/DeleteReferenceDialog";
 import { useAuth } from "@/lib/auth-context";
 import { toast } from "sonner";
 import {
@@ -24,6 +25,7 @@ import {
   Search,
   BarChart3,
   Info,
+  Trash2,
 } from "lucide-react";
 
 interface Country {
@@ -45,6 +47,10 @@ export default function CountriesCMSPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingCountry, setEditingCountry] = useState<Country | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // Delete confirmation — one dialog, driven by which row was clicked.
+  // SYSTEM_OWNER-only per RBAC check on this whole page and the API.
+  const [deleteTarget, setDeleteTarget] = useState<Country | null>(null);
 
   const [formData, setFormData] = useState({
     code: "",
@@ -295,6 +301,16 @@ export default function CountriesCMSPage() {
                         >
                           <Pencil className="w-4 h-4" />
                         </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setDeleteTarget(country)}
+                          data-design-id={`country-delete-${country.code}`}
+                          title="Delete country"
+                          className="text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -449,6 +465,33 @@ export default function CountriesCMSPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/*
+        Destructive-confirmation dialog for country delete.
+        Shown only when a row's trash icon is clicked; API enforces SYSTEM_OWNER
+        server-side. See src/lib/reference-delete.ts for blocked-delete rules
+        (admin areas / projects / organizations / country indicators).
+      */}
+      <DeleteReferenceDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+        kindLabel="country"
+        name={deleteTarget?.name ?? ""}
+        deleteUrl={
+          deleteTarget
+            ? `/api/reference/countries/${encodeURIComponent(
+                deleteTarget.code,
+              )}`
+            : ""
+        }
+        designId="country-delete-dialog"
+        onSuccess={() => {
+          setDeleteTarget(null);
+          fetchCountries();
+        }}
+      />
     </div>
   );
 }

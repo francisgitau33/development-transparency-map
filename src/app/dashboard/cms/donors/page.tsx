@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/table";
 import { LoadingState } from "@/components/shared/LoadingState";
 import { ErrorState } from "@/components/shared/ErrorState";
+import { DeleteReferenceDialog } from "@/components/shared/DeleteReferenceDialog";
 import { useAuth } from "@/lib/auth-context";
 import { toast } from "sonner";
 import {
@@ -49,6 +50,7 @@ import {
   HandCoins,
   Search,
   ExternalLink,
+  Trash2,
 } from "lucide-react";
 
 interface Donor {
@@ -84,6 +86,10 @@ export default function DonorsCMSPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Donor | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // Delete confirmation — target row drives the DeleteReferenceDialog.
+  // SYSTEM_OWNER-only per RBAC guard on this page + the DELETE API.
+  const [deleteTarget, setDeleteTarget] = useState<Donor | null>(null);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -333,8 +339,20 @@ export default function DonorsCMSPage() {
                         variant="ghost"
                         size="sm"
                         onClick={() => openDialog(d)}
+                        data-design-id={`donor-edit-${d.id}`}
+                        title="Edit donor"
                       >
                         <Pencil className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setDeleteTarget(d)}
+                        data-design-id={`donor-delete-${d.id}`}
+                        title="Delete donor"
+                        className="text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                      >
+                        <Trash2 className="w-4 h-4" />
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -471,6 +489,28 @@ export default function DonorsCMSPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/*
+        Destructive-confirmation dialog for donor delete.
+        Blocked with project counts (see src/lib/reference-delete.ts) when
+        the donor is still linked to one or more projects.
+      */}
+      <DeleteReferenceDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+        kindLabel="donor"
+        name={deleteTarget?.name ?? ""}
+        deleteUrl={
+          deleteTarget ? `/api/reference/donors/${deleteTarget.id}` : ""
+        }
+        designId="donor-delete-dialog"
+        onSuccess={() => {
+          setDeleteTarget(null);
+          fetchDonors();
+        }}
+      />
     </div>
   );
 }

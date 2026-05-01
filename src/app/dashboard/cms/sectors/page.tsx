@@ -14,11 +14,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { LoadingState } from "@/components/shared/LoadingState";
 import { ErrorState } from "@/components/shared/ErrorState";
+import { DeleteReferenceDialog } from "@/components/shared/DeleteReferenceDialog";
 import { SectorIcon } from "@/components/shared/SectorIcon";
 import { availableIconKeys, formatIconKeyForDisplay } from "@/lib/icons/sector-icons";
 import { useAuth } from "@/lib/auth-context";
 import { toast } from "sonner";
-import { Plus, ArrowLeft, Pencil, Search } from "lucide-react";
+import { Plus, ArrowLeft, Pencil, Search, Trash2 } from "lucide-react";
 
 interface Sector {
   key: string;
@@ -40,6 +41,10 @@ export default function SectorsCMSPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingSector, setEditingSector] = useState<Sector | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // Delete confirmation — target row drives the DeleteReferenceDialog.
+  // SYSTEM_OWNER-only per RBAC guard on this page + the DELETE API.
+  const [deleteTarget, setDeleteTarget] = useState<Sector | null>(null);
 
   const [formData, setFormData] = useState({
     key: "",
@@ -260,8 +265,19 @@ export default function SectorsCMSPage() {
                         size="sm"
                         onClick={() => openDialog(sector)}
                         data-design-id={`sector-edit-${sector.key}`}
+                        title="Edit sector"
                       >
                         <Pencil className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setDeleteTarget(sector)}
+                        data-design-id={`sector-delete-${sector.key}`}
+                        title="Delete sector"
+                        className="text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                      >
+                        <Trash2 className="w-4 h-4" />
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -409,6 +425,32 @@ export default function SectorsCMSPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/*
+        Destructive-confirmation dialog for sector delete.
+        Blocked with project counts when any Project.sectorKey still
+        references this sector (see src/lib/reference-delete.ts).
+      */}
+      <DeleteReferenceDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+        kindLabel="sector"
+        name={deleteTarget?.name ?? ""}
+        deleteUrl={
+          deleteTarget
+            ? `/api/reference/sectors/${encodeURIComponent(
+                deleteTarget.key,
+              )}`
+            : ""
+        }
+        designId="sector-delete-dialog"
+        onSuccess={() => {
+          setDeleteTarget(null);
+          fetchSectors();
+        }}
+      />
     </div>
   );
 }

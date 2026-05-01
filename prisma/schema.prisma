@@ -165,8 +165,21 @@ model ReferenceCountry {
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
 
+  // Soft-delete markers (Reference Data Delete — PRD §9.x).
+  // When `deletedAt` is set, the row is considered removed: it is excluded
+  // from every public GET, filter dropdown, and upload form. It remains in
+  // the table so historical project / organization / indicator data that
+  // still references the code keeps resolving. Hard-delete is never issued
+  // for this table because the code column is used as a foreign key from
+  // AdministrativeArea / CountryIndicator and as a string key from Project /
+  // Organization.
+  deletedAt       DateTime?
+  deletedByUserId String?
+
   administrativeAreas AdministrativeArea[]
   indicators          CountryIndicator[]
+
+  @@index([deletedAt])
 }
 
 // Country Development Context indicators (Prompt 8 — Country Development
@@ -245,6 +258,14 @@ model AdministrativeArea {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  // Soft-delete markers (Reference Data Delete — PRD §9.x).
+  // Mirrors ReferenceCountry: set `deletedAt` to hide the row from public
+  // filters / upload forms / partner dropdowns without breaking historical
+  // projects that still reference it. Hard-delete remains guarded (blocked
+  // if any Project.administrativeAreaId matches).
+  deletedAt       DateTime?
+  deletedByUserId String?
+
   country  ReferenceCountry @relation(fields: [countryCode], references: [code])
   projects Project[]
 
@@ -252,6 +273,7 @@ model AdministrativeArea {
   @@index([countryCode])
   @@index([active])
   @@index([sortOrder])
+  @@index([deletedAt])
 }
 
 // Donor reference data. Used to tag which funder(s) back a project so the
@@ -267,10 +289,18 @@ model Donor {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  // Soft-delete markers (Reference Data Delete — PRD §9.x).
+  // Donors are referenced by Project.donorId. Setting `deletedAt` hides
+  // the donor from public filters + upload templates + partner dropdowns
+  // while keeping historical project attribution intact.
+  deletedAt       DateTime?
+  deletedByUserId String?
+
   projects Project[]
 
   @@index([active])
   @@index([sortOrder])
+  @@index([deletedAt])
 }
 
 // Reference sectors
@@ -283,6 +313,15 @@ model ReferenceSector {
   sortOrder Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // Soft-delete markers (Reference Data Delete — PRD §9.x).
+  // Sectors are referenced by Project.sectorKey. Setting `deletedAt` hides
+  // the sector from public map filters + upload templates + project forms
+  // while keeping historical project attribution intact.
+  deletedAt       DateTime?
+  deletedByUserId String?
+
+  @@index([deletedAt])
 }
 
 // CMS About page
