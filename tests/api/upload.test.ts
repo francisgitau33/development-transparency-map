@@ -323,6 +323,198 @@ describe("POST /api/upload — header / row validation", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Soft-delete rejection for reference data consumed by the CSV validator.
+//
+// The release-hardening pass made the reference-data queries pair
+// `active: true` with `deletedAt: null`, and the in-memory admin-area /
+// donor validation treats a row as "not active" if either flag is off.
+// These tests assert both invariants directly.
+// ---------------------------------------------------------------------------
+
+describe("POST /api/upload — soft-delete rejection", () => {
+  beforeEach(() => {
+    mockGetSession.mockResolvedValue({
+      userId: "partner-sd",
+      email: "sd@example.com",
+      displayName: "SD",
+    });
+    userFindUnique.mockResolvedValue({
+      id: "partner-sd",
+      email: "sd@example.com",
+      role: { role: "PARTNER_ADMIN", organizationId: "org-sd" },
+    });
+  });
+
+  it("queries ReferenceCountry with active:true AND deletedAt:null", async () => {
+    countryFindMany.mockResolvedValue([{ code: "KE" }]);
+    sectorFindMany.mockResolvedValue([{ key: "HEALTH" }]);
+    orgFindUnique.mockResolvedValue({
+      id: "org-sd",
+      name: "NGO",
+      countryScope: "ALL",
+      countryCode: null,
+      operatingCountries: [],
+    });
+    uploadJobCreate.mockResolvedValue({ id: "job-sd" });
+    projectCreateMany.mockResolvedValue({ count: 1 });
+
+    await POST(
+      makeReq({
+        headers: [
+          "title",
+          "countryCode",
+          "sectorKey",
+          "status",
+          "startDate",
+          "latitude",
+          "longitude",
+        ],
+        rows: [
+          {
+            title: "t",
+            countryCode: "KE",
+            sectorKey: "HEALTH",
+            status: "ACTIVE",
+            startDate: "2025-01-01",
+            latitude: "-1.2",
+            longitude: "36.8",
+          },
+        ],
+      }),
+    );
+
+    expect(countryFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { active: true, deletedAt: null },
+      }),
+    );
+    expect(sectorFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { active: true, deletedAt: null },
+      }),
+    );
+  });
+
+  it("rejects a row referencing a soft-deleted administrative area", async () => {
+    countryFindMany.mockResolvedValue([{ code: "KE" }]);
+    sectorFindMany.mockResolvedValue([{ key: "HEALTH" }]);
+    orgFindUnique.mockResolvedValue({
+      id: "org-sd",
+      name: "NGO",
+      countryScope: "ALL",
+      countryCode: null,
+      operatingCountries: [],
+    });
+    // Admin-area row exists but is soft-deleted (active:true, deletedAt:Date).
+    areaFindMany.mockResolvedValue([
+      {
+        id: "area-1",
+        name: "Nairobi",
+        countryCode: "KE",
+        active: true,
+        deletedAt: new Date("2025-10-01"),
+      },
+    ]);
+    uploadJobCreate.mockResolvedValue({ id: "job-sd" });
+
+    const res = await POST(
+      makeReq({
+        headers: [
+          "title",
+          "countryCode",
+          "sectorKey",
+          "status",
+          "startDate",
+          "latitude",
+          "longitude",
+          "districtCounty",
+        ],
+        rows: [
+          {
+            title: "t",
+            countryCode: "KE",
+            sectorKey: "HEALTH",
+            status: "ACTIVE",
+            startDate: "2025-01-01",
+            latitude: "-1.2",
+            longitude: "36.8",
+            districtCounty: "Nairobi",
+          },
+        ],
+      }),
+    );
+    const body = (await res.json()) as {
+      invalidRows: number;
+      validRows: number;
+      errors: Array<{ errors: string[] }>;
+    };
+    expect(body.invalidRows).toBe(1);
+    expect(body.validRows).toBe(0);
+    expect(body.errors[0].errors.join(" ")).toMatch(
+      /District \/ County 'Nairobi' is not active/i,
+    );
+  });
+
+  it("rejects a row referencing a soft-deleted donor", async () => {
+    countryFindMany.mockResolvedValue([{ code: "KE" }]);
+    sectorFindMany.mockResolvedValue([{ key: "HEALTH" }]);
+    orgFindUnique.mockResolvedValue({
+      id: "org-sd",
+      name: "NGO",
+      countryScope: "ALL",
+      countryCode: null,
+      operatingCountries: [],
+    });
+    donorFindMany.mockResolvedValue([
+      {
+        id: "donor-1",
+        name: "World Bank",
+        active: true,
+        deletedAt: new Date("2025-10-01"),
+      },
+    ]);
+    uploadJobCreate.mockResolvedValue({ id: "job-sd" });
+
+    const res = await POST(
+      makeReq({
+        headers: [
+          "title",
+          "countryCode",
+          "sectorKey",
+          "status",
+          "startDate",
+          "latitude",
+          "longitude",
+          "donor",
+        ],
+        rows: [
+          {
+            title: "t",
+            countryCode: "KE",
+            sectorKey: "HEALTH",
+            status: "ACTIVE",
+            startDate: "2025-01-01",
+            latitude: "-1.2",
+            longitude: "36.8",
+            donor: "World Bank",
+          },
+        ],
+      }),
+    );
+    const body = (await res.json()) as {
+      invalidRows: number;
+      validRows: number;
+      errors: Array<{ errors: string[] }>;
+    };
+    expect(body.invalidRows).toBe(1);
+    expect(body.validRows).toBe(0);
+    expect(body.errors[0].errors.join(" ")).toMatch(
+      /Donor 'World Bank' is not active/i,
+    );
+  });
+});
+
 describe("POST /api/upload — rate limit", () => {
   beforeEach(() => {
     mockGetSession.mockResolvedValue({

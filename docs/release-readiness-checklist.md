@@ -27,8 +27,8 @@ will either cause the app to throw at start (security-critical cases like
 | `EMAIL_FROM` | ✅ | `src/lib/email.ts` | Sender address. Must be a verified domain/identity with the provider. |
 | `NEXT_PUBLIC_HCAPTCHA_SITE_KEY` | ✅ | `src/components/auth/HCaptchaWidget.tsx` | Public site key. Safe to embed in the client bundle. |
 | `HCAPTCHA_SECRET` | ✅ | `src/lib/captcha.ts` | Server-side verify secret. If missing in production, registrations are **refused** with a 500 to avoid running without CAPTCHA protection. |
-| `SYSTEM_OWNER_EMAIL` | ✅ (seed only) | `prisma/seed.ts`, `src/lib/branding.ts` | Email of the initial System Owner. Used by the seed script to bootstrap the first account. |
-| `SYSTEM_OWNER_PASSWORD` | ⚠️ seed-only | `prisma/seed.ts` | ONLY used by the seed script. Rotate immediately after first login. Do NOT leave this in the deployment environment after seed. |
+| `SYSTEM_OWNER_EMAIL` | ✅ **required for seed** | `prisma/seed.ts`, `src/lib/branding.ts` | Email of the initial System Owner. The seed has no default fallback — running `prisma db seed` without this variable will fail with a clear error. Used by `src/lib/branding.ts` for owner-only UI hints. |
+| `SYSTEM_OWNER_PASSWORD` | ⚠️ seed-only | `prisma/seed.ts` | ONLY used by the seed script. Rotate immediately after first login. Do NOT leave this in the deployment environment after seed. If omitted, the seed logs a warning and skips System Owner creation (other seed steps still run). |
 
 Other variables you may set:
 - `PORT` — Next.js listen port (defaults to 3000).
@@ -50,8 +50,11 @@ availability.
 - [ ] Confirm `DATABASE_URL` points at the correct production cluster.
 - [ ] Run `bunx prisma migrate deploy` and verify status is "No pending
       migrations".
-- [ ] Run the System Owner seed once: `bunx tsx prisma/seed.ts`. Confirm
-      a single `Role { role: SYSTEM_OWNER }` row exists.
+- [ ] Run the System Owner seed once with both env vars set explicitly:
+      `SYSTEM_OWNER_EMAIL=owner@example.org SYSTEM_OWNER_PASSWORD=ChangeMe123! bunx tsx prisma/seed.ts`.
+      The seed refuses to run without `SYSTEM_OWNER_EMAIL` (there is no
+      default fallback). Confirm a single `Role { role: SYSTEM_OWNER }`
+      row exists.
 - [ ] **Rotate the seed password**: log in as the System Owner and change
       the password immediately. Unset `SYSTEM_OWNER_PASSWORD` in the
       deployment environment afterwards.

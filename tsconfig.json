@@ -31,16 +31,10 @@
   "include": [
     "**/*.ts",
     "**/*.tsx",
-    ".next-build-audit-readonly/types/**/*.ts",
-    ".next-build-audit/types/**/*.ts",
-    ".next-build-multicountry/types/**/*.ts",
-    ".next-build-refdelete/types/**/*.ts",
-    ".next-build-test/types/**/*.ts",
     ".next-build/types/**/*.ts",
     ".next/types/**/*.ts",
-    "build/types/**/*.ts",
     "next-env.d.ts",
-    ".next-build-project-scope/types/**/*.ts"
+    ".next-build-release/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

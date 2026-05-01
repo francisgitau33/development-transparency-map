@@ -163,6 +163,7 @@ beforeEach(() => {
     key: "HEALTH",
     name: "Health",
     active: true,
+    deletedAt: null,
   });
 
   // Default org: not found. Tests that need one set it up explicitly.
@@ -655,5 +656,304 @@ describe("PUT /api/projects/:id — organization country scope", () => {
     );
     expect(res.status).toBe(200);
     expect(projectUpdate).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Soft-delete rejection (ReferenceCountry / ReferenceSector /
+// AdministrativeArea / Donor).
+//
+// The release-hardening pass made every reference-data lookup that feeds a
+// project write require BOTH `active: true` and `deletedAt: null`. The
+// invariant is checked in-memory against the Prisma result so these tests
+// stub a reference row that is technically still `active: true` but has
+// `deletedAt: <Date>` (or vice versa) and asserts the route rejects with
+// 400.
+// ---------------------------------------------------------------------------
+
+describe("POST /api/projects — soft-delete rejection", () => {
+  it("rejects a soft-deleted country even if active:true", async () => {
+    mockSystemOwner();
+    // active: true, but deletedAt set → should be rejected.
+    countryFindUnique.mockResolvedValue({
+      code: "KE",
+      name: "Kenya",
+      active: true,
+      deletedAt: new Date("2025-10-01"),
+    });
+
+    const res = await post(
+      makeReq("http://x/api/projects", {
+        method: "POST",
+        body: {
+          ...VALID_PROJECT_BODY,
+          organizationId: "org-1",
+          countryCode: "KE",
+        },
+      }),
+    );
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toMatch(/Invalid or inactive country code/);
+    expect(projectCreate).not.toHaveBeenCalled();
+  });
+
+  it("rejects a deactivated country (active:false, deletedAt:null)", async () => {
+    mockSystemOwner();
+    countryFindUnique.mockResolvedValue({
+      code: "KE",
+      name: "Kenya",
+      active: false,
+      deletedAt: null,
+    });
+
+    const res = await post(
+      makeReq("http://x/api/projects", {
+        method: "POST",
+        body: {
+          ...VALID_PROJECT_BODY,
+          organizationId: "org-1",
+          countryCode: "KE",
+        },
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(projectCreate).not.toHaveBeenCalled();
+  });
+
+  it("rejects a soft-deleted sector even if active:true", async () => {
+    mockSystemOwner();
+    // country is fine (default mock), sector is soft-deleted.
+    sectorFindUnique.mockResolvedValue({
+      key: "HEALTH",
+      name: "Health",
+      active: true,
+      deletedAt: new Date("2025-10-01"),
+    });
+
+    const res = await post(
+      makeReq("http://x/api/projects", {
+        method: "POST",
+        body: {
+          ...VALID_PROJECT_BODY,
+          organizationId: "org-1",
+          countryCode: "KE",
+        },
+      }),
+    );
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toMatch(/Invalid or inactive sector/);
+    expect(projectCreate).not.toHaveBeenCalled();
+  });
+
+  it("rejects a soft-deleted administrative area even if active:true", async () => {
+    mockSystemOwner();
+    // ALL-scope org so the scope check passes trivially.
+    orgFindUnique.mockResolvedValue({
+      id: "org-all",
+      name: "Global INGO",
+      countryScope: "ALL",
+      countryCode: null,
+      operatingCountries: [],
+    });
+    areaFindUnique.mockResolvedValue({
+      id: "area-1",
+      name: "Nairobi",
+      countryCode: "KE",
+      active: true,
+      deletedAt: new Date("2025-10-01"),
+    });
+
+    const res = await post(
+      makeReq("http://x/api/projects", {
+        method: "POST",
+        body: {
+          ...VALID_PROJECT_BODY,
+          organizationId: "org-all",
+          countryCode: "KE",
+          administrativeAreaId: "area-1",
+        },
+      }),
+    );
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toMatch(/district \/ county is not active/i);
+    expect(projectCreate).not.toHaveBeenCalled();
+  });
+
+  it("rejects a soft-deleted donor even if active:true", async () => {
+    mockSystemOwner();
+    orgFindUnique.mockResolvedValue({
+      id: "org-all",
+      name: "Global INGO",
+      countryScope: "ALL",
+      countryCode: null,
+      operatingCountries: [],
+    });
+    donorFindUnique.mockResolvedValue({
+      id: "donor-1",
+      name: "World Bank",
+      active: true,
+      deletedAt: new Date("2025-10-01"),
+    });
+
+    const res = await post(
+      makeReq("http://x/api/projects", {
+        method: "POST",
+        body: {
+          ...VALID_PROJECT_BODY,
+          organizationId: "org-all",
+          countryCode: "KE",
+          donorId: "donor-1",
+        },
+      }),
+    );
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toMatch(/donor is not active/i);
+    expect(projectCreate).not.toHaveBeenCalled();
+  });
+});
+
+describe("PUT /api/projects/:id — soft-delete rejection", () => {
+  const ctx = { params: Promise.resolve({ id: "proj-1" }) };
+
+  function mockExistingProject(
+    overrides: Partial<Record<string, unknown>> = {},
+  ) {
+    projectFindUnique.mockResolvedValue({
+      id: "proj-1",
+      title: "Original",
+      description: "Existing project description.",
+      organizationId: "org-ke",
+      countryCode: "KE",
+      sectorKey: "HEALTH",
+      status: "ACTIVE",
+      visibility: "PUBLISHED",
+      startDate: new Date("2025-01-01"),
+      endDate: null,
+      latitude: -1.2,
+      longitude: 36.8,
+      ...overrides,
+    });
+  }
+
+  it("rejects when the requested country is soft-deleted", async () => {
+    mockSystemOwner();
+    mockExistingProject();
+    // Attempt to move the project onto TZ which has been soft-deleted.
+    countryFindUnique.mockImplementation(async (args: unknown) => {
+      const code = (args as { where: { code: string } }).where.code;
+      if (code === "TZ") {
+        return {
+          code: "TZ",
+          name: "Tanzania",
+          active: true,
+          deletedAt: new Date("2025-10-01"),
+        };
+      }
+      return { code, name: code, active: true, deletedAt: null };
+    });
+
+    const res = await put(
+      makeReq("http://x/api/projects/proj-1", {
+        method: "PUT",
+        body: {
+          ...VALID_PROJECT_BODY,
+          organizationId: "org-ke",
+          countryCode: "TZ",
+        },
+      }),
+      ctx,
+    );
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toMatch(/Invalid or inactive country code/);
+    expect(projectUpdate).not.toHaveBeenCalled();
+  });
+
+  it("rejects when the requested sector is soft-deleted", async () => {
+    mockSystemOwner();
+    mockExistingProject();
+    sectorFindUnique.mockResolvedValue({
+      key: "HEALTH",
+      name: "Health",
+      active: true,
+      deletedAt: new Date("2025-10-01"),
+    });
+
+    const res = await put(
+      makeReq("http://x/api/projects/proj-1", {
+        method: "PUT",
+        body: {
+          ...VALID_PROJECT_BODY,
+          organizationId: "org-ke",
+          countryCode: "KE",
+        },
+      }),
+      ctx,
+    );
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toMatch(/Invalid or inactive sector/);
+    expect(projectUpdate).not.toHaveBeenCalled();
+  });
+
+  it("rejects when the requested administrative area is soft-deleted", async () => {
+    mockSystemOwner();
+    mockExistingProject();
+    areaFindUnique.mockResolvedValue({
+      id: "area-1",
+      name: "Nairobi",
+      countryCode: "KE",
+      active: true,
+      deletedAt: new Date("2025-10-01"),
+    });
+
+    const res = await put(
+      makeReq("http://x/api/projects/proj-1", {
+        method: "PUT",
+        body: {
+          ...VALID_PROJECT_BODY,
+          organizationId: "org-ke",
+          countryCode: "KE",
+          administrativeAreaId: "area-1",
+        },
+      }),
+      ctx,
+    );
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toMatch(/district \/ county is not active/i);
+    expect(projectUpdate).not.toHaveBeenCalled();
+  });
+
+  it("rejects when the requested donor is soft-deleted", async () => {
+    mockSystemOwner();
+    mockExistingProject();
+    donorFindUnique.mockResolvedValue({
+      id: "donor-1",
+      name: "World Bank",
+      active: true,
+      deletedAt: new Date("2025-10-01"),
+    });
+
+    const res = await put(
+      makeReq("http://x/api/projects/proj-1", {
+        method: "PUT",
+        body: {
+          ...VALID_PROJECT_BODY,
+          organizationId: "org-ke",
+          countryCode: "KE",
+          donorId: "donor-1",
+        },
+      }),
+      ctx,
+    );
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toMatch(/donor is not active/i);
+    expect(projectUpdate).not.toHaveBeenCalled();
   });
 });

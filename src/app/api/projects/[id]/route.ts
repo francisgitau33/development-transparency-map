@@ -159,12 +159,15 @@ export async function PUT(
       ? String(data.sectorKey).toUpperCase()
       : undefined;
 
+    // Reference-data re-validation — soft-deleted rows (`deletedAt != null`)
+    // are treated the same as deactivated rows so an edit can never move
+    // a project onto a hidden country or sector.
     let resolvedCountry: { code: string; name: string } | null = null;
     if (countryCode) {
       const country = await prisma.referenceCountry.findUnique({
         where: { code: countryCode },
       });
-      if (!country || !country.active) {
+      if (!country || !country.active || country.deletedAt !== null) {
         return NextResponse.json(
           { error: "Invalid or inactive country code" },
           { status: 400 },
@@ -177,7 +180,7 @@ export async function PUT(
       const sector = await prisma.referenceSector.findUnique({
         where: { key: sectorKey },
       });
-      if (!sector || !sector.active) {
+      if (!sector || !sector.active || sector.deletedAt !== null) {
         return NextResponse.json(
           { error: "Invalid or inactive sector" },
           { status: 400 },
@@ -250,6 +253,8 @@ export async function PUT(
 
     // Validate district / county linkage against the (possibly updated)
     // country code. Accept `null` as "detach the admin area".
+    // Soft-deleted rows (`deletedAt != null`) are rejected identically to
+    // deactivated rows.
     if (data.administrativeAreaId) {
       const area = await prisma.administrativeArea.findUnique({
         where: { id: String(data.administrativeAreaId) },
@@ -260,7 +265,7 @@ export async function PUT(
           { status: 400 },
         );
       }
-      if (!area.active) {
+      if (!area.active || area.deletedAt !== null) {
         return NextResponse.json(
           { error: "Selected district / county is not active" },
           { status: 400 },
@@ -288,7 +293,7 @@ export async function PUT(
           { status: 400 },
         );
       }
-      if (!donor.active) {
+      if (!donor.active || donor.deletedAt !== null) {
         return NextResponse.json(
           { error: "Selected donor is not active" },
           { status: 400 },

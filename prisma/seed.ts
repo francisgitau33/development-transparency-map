@@ -1,5 +1,6 @@
 import { PrismaClient, Prisma } from "@prisma/client";
 import bcrypt from "bcrypt";
+import { resolveSystemOwnerEmail } from "./seed-helpers";
 
 const prisma = new PrismaClient();
 
@@ -31,22 +32,40 @@ async function recordSeedAudit(
 
 /**
  * SYSTEM_OWNER SEEDING
- * 
+ *
  * Environment Variables Required:
- * - SYSTEM_OWNER_EMAIL: Email for the initial system owner (defaults to branding config)
- * - SYSTEM_OWNER_PASSWORD: Initial password for the system owner (REQUIRED for first setup)
- * 
- * This is idempotent - running multiple times will:
+ * - SYSTEM_OWNER_EMAIL    — REQUIRED. Email for the initial system owner.
+ *   There is intentionally no default so that no personal email is ever
+ *   baked into a production seed.
+ * - SYSTEM_OWNER_PASSWORD — REQUIRED for first setup. If omitted the seed
+ *   logs a clear message and skips user creation (other seed steps such
+ *   as reference data still run).
+ *
+ * This step is idempotent — running multiple times will:
  * - Skip user creation if email already exists
  * - Update/create role if user exists but role is missing
+ *
+ * Example (local dev):
+ *   SYSTEM_OWNER_EMAIL=owner@example.org \
+ *   SYSTEM_OWNER_PASSWORD=ChangeMe123! \
+ *     npx prisma db seed
+ *
+ * The only valid roles the seed assigns are SYSTEM_OWNER and
+ * PARTNER_ADMIN (PARTNER_ADMIN is assigned elsewhere).
+ *
+ * The `resolveSystemOwnerEmail` helper lives in `./seed-helpers` so it
+ * is unit-testable without instantiating `PrismaClient`.
  */
 async function seedSystemOwner() {
-  const systemOwnerEmail = process.env.SYSTEM_OWNER_EMAIL || "theforestforthetrees23@gmail.com";
+  const systemOwnerEmail = resolveSystemOwnerEmail();
   const systemOwnerPassword = process.env.SYSTEM_OWNER_PASSWORD;
 
   if (!systemOwnerPassword) {
     console.log("⚠️  SYSTEM_OWNER_PASSWORD not set - skipping system owner creation");
-    console.log("   To create initial admin, run with: SYSTEM_OWNER_PASSWORD=yourpassword npx prisma db seed");
+    console.log(
+      "   To create initial admin, run with: SYSTEM_OWNER_EMAIL=owner@example.org " +
+        "SYSTEM_OWNER_PASSWORD=yourpassword npx prisma db seed",
+    );
     return;
   }
 

@@ -198,10 +198,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Reference-data reads for CSV validation. The active + non-deleted
+    // invariant is spelled out explicitly (`active: true, deletedAt: null`)
+    // so soft-deleted rows can never be resolved to a valid upload target.
+    // AdministrativeArea and Donor are still fetched unfiltered so the
+    // validator can emit a precise "not active" error for rows that exist
+    // but are hidden (soft-deleted or deactivated) instead of the vaguer
+    // "not found".
     const [countries, sectors, organization, allAreas, allDonors] =
       await Promise.all([
-        prisma.referenceCountry.findMany({ where: { active: true } }),
-        prisma.referenceSector.findMany({ where: { active: true } }),
+        prisma.referenceCountry.findMany({
+          where: { active: true, deletedAt: null },
+        }),
+        prisma.referenceSector.findMany({
+          where: { active: true, deletedAt: null },
+        }),
         prisma.organization.findUnique({
           where: { id: organizationId },
           include: {
@@ -307,7 +318,9 @@ export async function POST(request: NextRequest) {
             errors.push(
               `District / County '${districtName}' was not found for country '${countryName}'.`,
             );
-          } else if (!found.active) {
+          } else if (!found.active || found.deletedAt !== null) {
+            // Soft-deleted rows (`deletedAt != null`) are treated as
+            // inactive so they cannot be resolved by a CSV upload.
             errors.push(
               `District / County '${districtName}' is not active.`,
             );
@@ -324,7 +337,9 @@ export async function POST(request: NextRequest) {
         const found = donorIndex.get(donorName.toLowerCase());
         if (!found) {
           errors.push(`Donor '${donorName}' was not found or is inactive.`);
-        } else if (!found.active) {
+        } else if (!found.active || found.deletedAt !== null) {
+          // Soft-deleted donors (`deletedAt != null`) are rejected the
+          // same way as deactivated donors.
           errors.push(`Donor '${donorName}' is not active.`);
         } else {
           donorId = found.id;

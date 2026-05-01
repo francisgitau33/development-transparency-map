@@ -178,10 +178,14 @@ export async function POST(request: NextRequest) {
       data.organizationId = user.role.organizationId;
     }
 
+    // Reference-data lookups use `findUnique` by PK because that is the
+    // primary index on these tables. The `active: true` + `deletedAt: null`
+    // invariant is then checked in-memory so new projects can never be
+    // written against soft-deleted or deactivated reference rows.
     const country = await prisma.referenceCountry.findUnique({
       where: { code: data.countryCode?.toUpperCase() },
     });
-    if (!country || !country.active) {
+    if (!country || !country.active || country.deletedAt !== null) {
       return NextResponse.json(
         { error: "Invalid or inactive country code" },
         { status: 400 },
@@ -191,7 +195,7 @@ export async function POST(request: NextRequest) {
     const sector = await prisma.referenceSector.findUnique({
       where: { key: data.sectorKey?.toUpperCase() },
     });
-    if (!sector || !sector.active) {
+    if (!sector || !sector.active || sector.deletedAt !== null) {
       return NextResponse.json(
         { error: "Invalid or inactive sector" },
         { status: 400 },
@@ -241,6 +245,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Reference-data sanity checks for Admin Area and Donor.
+    //
+    // Soft-deleted rows (`deletedAt != null`) are treated the same as
+    // inactive rows — both must be rejected so writes can never pin a new
+    // project to a hidden reference row.
     if (data.administrativeAreaId) {
       const area = await prisma.administrativeArea.findUnique({
         where: { id: String(data.administrativeAreaId) },
@@ -251,7 +259,7 @@ export async function POST(request: NextRequest) {
           { status: 400 },
         );
       }
-      if (!area.active) {
+      if (!area.active || area.deletedAt !== null) {
         return NextResponse.json(
           { error: "Selected district / county is not active" },
           { status: 400 },
@@ -281,7 +289,7 @@ export async function POST(request: NextRequest) {
           { status: 400 },
         );
       }
-      if (!donor.active) {
+      if (!donor.active || donor.deletedAt !== null) {
         return NextResponse.json(
           { error: "Selected donor is not active" },
           { status: 400 },

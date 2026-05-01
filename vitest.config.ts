@@ -32,10 +32,9 @@ export default defineConfig({
     exclude: [
       "node_modules",
       ".next",
-      ".next-build",
-      ".next-build-audit",
-      ".next-build-ci",
-      ".next-build-test",
+      // Match every ad-hoc build output directory (BUILD_DIR=.next-build-*).
+      // The specific names used during audit / CI runs all fit this glob.
+      ".next-build*/**",
     ],
     testTimeout: 10_000,
     coverage: {

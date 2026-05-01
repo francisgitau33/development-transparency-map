@@ -18,12 +18,10 @@
 /out/
 
 # custom next build output directories (BUILD_DIR=.next-build-*)
+# Covers .next-build, .next-build-audit, .next-build-test, .next-build-ci,
+# .next-build-release-audit, .next-build-final-check, and any ad-hoc
+# BUILD_DIR=.next-build-<label> used during audit/build runs.
 /.next-build*/
-/.next-build-audit/
-/.next-build-test/
-/.next-build-ci/
-/.next-build-release-audit/
-/.next-build-final-check/
 
 # production
 /build
