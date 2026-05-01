@@ -89,7 +89,30 @@ export function MapComponent({ projects, sectors, onProjectClick }: MapComponent
     mapInstanceRef.current = map;
     markersRef.current = L.layerGroup().addTo(map);
 
+    // Leaflet caches the container size at `L.map()` time. When the
+    // container is inside a flex column whose height is being resolved on
+    // the same tick (e.g. our fullBleed layout), Leaflet can read a
+    // too-small size and render the tiles as a short horizontal strip
+    // until the next map interaction. Invalidate on next paint, and again
+    // on any viewport resize, so the visible map always matches the
+    // current container height.
+    const invalidate = () => map.invalidateSize({ animate: false });
+    const raf = window.requestAnimationFrame(invalidate);
+    // Extra pass in case fonts / async layout shift height again shortly.
+    const timeout = window.setTimeout(invalidate, 200);
+    window.addEventListener("resize", invalidate);
+
+    let resizeObs: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== "undefined" && mapRef.current) {
+      resizeObs = new ResizeObserver(() => invalidate());
+      resizeObs.observe(mapRef.current);
+    }
+
     return () => {
+      window.cancelAnimationFrame(raf);
+      window.clearTimeout(timeout);
+      window.removeEventListener("resize", invalidate);
+      resizeObs?.disconnect();
       map.remove();
       mapInstanceRef.current = null;
     };
@@ -165,8 +188,14 @@ export function MapComponent({ projects, sectors, onProjectClick }: MapComponent
     <div
       ref={mapRef}
       data-design-id="map-container"
-      className="w-full h-full"
-      style={{ minHeight: "400px" }}
+      // `absolute inset-0` anchors the Leaflet container to the full size
+      // of its `relative` parent. This avoids the classic "narrow strip"
+      // bug where a nested `w-full h-full` div cannot resolve `h-full`
+      // because its parent's height is computed from flex-1 on the same
+      // tick. Absolute positioning reads the parent's resolved box
+      // directly. The parent on /map is `map-content` → `flex-1 min-h-0
+      // relative`.
+      className="absolute inset-0"
     />
   );
 }

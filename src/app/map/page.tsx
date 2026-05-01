@@ -204,29 +204,40 @@ export default function MapPage() {
   }, [filteredProjects]);
 
   return (
-    <PublicLayout fullHeight>
+    <PublicLayout fullBleed>
+      {/*
+        Layout contract for /map:
+        - PublicLayout.fullBleed => outer `h-screen overflow-hidden` and
+          main is `flex-1 min-h-0 flex-col`, so the Leaflet container owns
+          all vertical space below the 64px fixed header minus the compact
+          toolbar.
+        - `map-content` is `flex-1 min-h-0 relative` so (a) it shrinks
+          correctly inside the flex column and (b) the Legend / Summary
+          cards can float above the map via absolute positioning without
+          reserving any footer height.
+      */}
       <div
         data-design-id="map-page"
-        className="flex-1 flex flex-col"
+        className="flex-1 min-h-0 flex flex-col"
       >
         <div
           data-design-id="map-toolbar"
-          className="bg-white border-b border-slate-200 px-4 py-3 relative z-[1000]"
+          className="bg-white border-b border-slate-200 px-4 py-2 relative z-[1000] shrink-0"
         >
           <div
             data-design-id="map-toolbar-container"
-            className="max-w-7xl mx-auto flex flex-wrap items-center gap-3"
+            className="max-w-7xl mx-auto flex flex-wrap items-center gap-x-2 gap-y-1.5"
           >
             <div
               data-design-id="map-filter-icon"
-              className="flex items-center text-slate-700 font-medium"
+              className="flex items-center text-sm text-slate-700 font-medium"
             >
-              <Filter className="w-4 h-4 mr-2" />
+              <Filter className="w-4 h-4 mr-1.5" />
               Filters
             </div>
 
             <Select value={countryFilter} onValueChange={setCountryFilter}>
-              <SelectTrigger data-design-id="map-filter-country" className="w-[160px]">
+              <SelectTrigger data-design-id="map-filter-country" className="h-8 w-[140px] text-sm">
                 <SelectValue placeholder="All Countries" />
               </SelectTrigger>
               <SelectContent className="z-[1100]">
@@ -240,7 +251,7 @@ export default function MapPage() {
             </Select>
 
             <Select value={sectorFilter} onValueChange={setSectorFilter}>
-              <SelectTrigger data-design-id="map-filter-sector" className="w-[180px]">
+              <SelectTrigger data-design-id="map-filter-sector" className="h-8 w-[150px] text-sm">
                 <SelectValue placeholder="All Sectors" />
               </SelectTrigger>
               <SelectContent className="z-[1100]">
@@ -257,7 +268,7 @@ export default function MapPage() {
             </Select>
 
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger data-design-id="map-filter-status" className="w-[140px]">
+              <SelectTrigger data-design-id="map-filter-status" className="h-8 w-[120px] text-sm">
                 <SelectValue placeholder="All Status" />
               </SelectTrigger>
               <SelectContent className="z-[1100]">
@@ -269,7 +280,7 @@ export default function MapPage() {
             </Select>
 
             <Select value={orgTypeFilter} onValueChange={setOrgTypeFilter}>
-              <SelectTrigger data-design-id="map-filter-orgtype" className="w-[160px]">
+              <SelectTrigger data-design-id="map-filter-orgtype" className="h-8 w-[140px] text-sm">
                 <SelectValue placeholder="All Org Types" />
               </SelectTrigger>
               <SelectContent className="z-[1100]">
@@ -289,7 +300,7 @@ export default function MapPage() {
             >
               <SelectTrigger
                 data-design-id="map-filter-district"
-                className="w-[200px]"
+                className="h-8 w-[170px] text-sm"
                 title={
                   countryFilter === "_all"
                     ? "Select a country to filter by District / County"
@@ -316,7 +327,7 @@ export default function MapPage() {
             </Select>
 
             <Select value={donorFilter} onValueChange={setDonorFilter}>
-              <SelectTrigger data-design-id="map-filter-donor" className="w-[160px]">
+              <SelectTrigger data-design-id="map-filter-donor" className="h-8 w-[140px] text-sm">
                 <SelectValue placeholder="All Donors" />
               </SelectTrigger>
               <SelectContent className="z-[1100]">
@@ -335,7 +346,7 @@ export default function MapPage() {
                 size="sm"
                 onClick={clearFilters}
                 data-design-id="map-clear-filters"
-                className="text-slate-600"
+                className="h-8 px-2 text-slate-600"
               >
                 <X className="w-4 h-4 mr-1" />
                 Clear
@@ -344,7 +355,7 @@ export default function MapPage() {
 
             <div
               data-design-id="map-stats"
-              className="ml-auto flex items-center gap-4 text-sm text-slate-600"
+              className="ml-auto flex items-center gap-3 text-sm text-slate-600"
             >
               <span data-design-id="map-stats-projects" className="flex items-center">
                 <MapPin className="w-4 h-4 mr-1" />
@@ -360,7 +371,7 @@ export default function MapPage() {
 
         <div
           data-design-id="map-content"
-          className="flex-1 relative"
+          className="flex-1 min-h-0 relative"
         >
           {loading && (
             <div className="absolute inset-0 flex items-center justify-center bg-slate-100 z-10">
@@ -380,12 +391,12 @@ export default function MapPage() {
 
           <Card
             data-design-id="map-legend"
-            className="absolute bottom-4 left-4 z-[1000] bg-white/95 backdrop-blur-sm shadow-lg w-48 md:w-56"
+            className="absolute bottom-3 left-3 z-[1000] bg-white/95 backdrop-blur-sm shadow-lg w-44 md:w-52"
           >
             <button
               onClick={() => setLegendExpanded(!legendExpanded)}
               data-design-id="map-legend-header"
-              className="flex items-center justify-between w-full p-3 font-semibold text-slate-900 hover:bg-slate-50 transition-colors"
+              className="flex items-center justify-between w-full px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50 transition-colors"
             >
               <div className="flex items-center">
                 <Layers className="w-4 h-4 mr-2" />
@@ -400,7 +411,7 @@ export default function MapPage() {
             {legendExpanded && (
               <div
                 data-design-id="map-legend-items"
-                className="px-3 pb-3 space-y-1.5 max-h-48 overflow-y-auto"
+                className="px-3 pb-2.5 space-y-1 max-h-40 overflow-y-auto text-sm"
               >
                 {error && sectors.length === 0 ? (
                   <div className="flex items-center gap-2 text-sm text-amber-600">
@@ -425,38 +436,46 @@ export default function MapPage() {
 
           <Card
             data-design-id="map-summary"
-            className="absolute bottom-4 right-4 z-[1000] p-4 bg-white/95 backdrop-blur-sm"
+            className="absolute bottom-3 right-3 z-[1000] p-2.5 bg-white/95 backdrop-blur-sm shadow-lg"
           >
             <div
               data-design-id="map-summary-header"
-              className="font-semibold text-slate-900 mb-3"
+              className="text-xs font-semibold text-slate-900 mb-1.5"
             >
               Summary
             </div>
             <div
               data-design-id="map-summary-stats"
-              className="grid grid-cols-2 gap-3 text-sm"
+              className="grid grid-cols-2 gap-1.5 text-xs"
             >
-              <div data-design-id="map-summary-active">
-                <Badge variant="outline" className="bg-sky-50 text-sky-700 border-sky-200">
-                  Active: {stats.active}
-                </Badge>
-              </div>
-              <div data-design-id="map-summary-planned">
-                <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
-                  Planned: {stats.planned}
-                </Badge>
-              </div>
-              <div data-design-id="map-summary-completed">
-                <Badge variant="outline" className="bg-slate-50 text-slate-700 border-slate-200">
-                  Completed: {stats.completed}
-                </Badge>
-              </div>
-              <div data-design-id="map-summary-total">
-                <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                  Total: {stats.total}
-                </Badge>
-              </div>
+              <Badge
+                data-design-id="map-summary-active"
+                variant="outline"
+                className="bg-sky-50 text-sky-700 border-sky-200"
+              >
+                Active: {stats.active}
+              </Badge>
+              <Badge
+                data-design-id="map-summary-planned"
+                variant="outline"
+                className="bg-amber-50 text-amber-700 border-amber-200"
+              >
+                Planned: {stats.planned}
+              </Badge>
+              <Badge
+                data-design-id="map-summary-completed"
+                variant="outline"
+                className="bg-slate-50 text-slate-700 border-slate-200"
+              >
+                Completed: {stats.completed}
+              </Badge>
+              <Badge
+                data-design-id="map-summary-total"
+                variant="outline"
+                className="bg-blue-50 text-blue-700 border-blue-200"
+              >
+                Total: {stats.total}
+              </Badge>
             </div>
           </Card>
         </div>
