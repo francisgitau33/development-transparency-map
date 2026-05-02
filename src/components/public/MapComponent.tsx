@@ -15,6 +15,9 @@ interface Project {
   status: string;
   locationName: string | null;
   targetBeneficiaries: number | null;
+  // Optional donor / funding / grant reference code — displayed in the
+  // popup only when populated. Not used for filtering or analytics.
+  donorFundingCode?: string | null;
   organization: {
     id: string;
     name: string;
@@ -151,6 +154,14 @@ export function MapComponent({ projects, sectors, onProjectClick }: MapComponent
       const donorLine = project.donor
         ? `<p style="margin: 0 0 4px 0; font-size: 12px; color: #64748b;"><strong>Donor:</strong> ${esc(project.donor.name)}</p>`
         : "";
+      // Only render the funding-code row when it carries a non-empty
+      // value — absent or blank codes leave the popup untouched so it
+      // stays compact.
+      const fundingCodeLine =
+        typeof project.donorFundingCode === "string" &&
+        project.donorFundingCode.trim().length > 0
+          ? `<p style="margin: 0 0 4px 0; font-size: 12px; color: #64748b;"><strong>Donor / Funding Code:</strong> ${esc(project.donorFundingCode.trim())}</p>`
+          : "";
 
       const popupContent = `
         <div style="min-width: 220px; font-family: system-ui, sans-serif;">
@@ -160,6 +171,7 @@ export function MapComponent({ projects, sectors, onProjectClick }: MapComponent
           ${project.locationName ? `<p style="margin: 0 0 4px 0; font-size: 12px; color: #64748b;"><strong>Location:</strong> ${esc(project.locationName)}</p>` : ""}
           ${districtLine}
           ${donorLine}
+          ${fundingCodeLine}
           <p style="margin: 0 0 4px 0; font-size: 12px; color: #64748b;"><strong>Target Beneficiaries:</strong> ${formatNumber(project.targetBeneficiaries)}</p>
           <p style="margin: 0 0 4px 0; font-size: 12px; color: #64748b;"><strong>Status:</strong> <span style="display: inline-block; padding: 2px 8px; background: ${project.status === "ACTIVE" ? "#dcfce7" : project.status === "PLANNED" ? "#fef3c7" : "#e2e8f0"}; color: ${project.status === "ACTIVE" ? "#166534" : project.status === "PLANNED" ? "#92400e" : "#475569"}; border-radius: 9999px; font-size: 11px;">${project.status}</span></p>
           <p style="margin: 8px 0 0 0; font-size: 12px; color: #475569; line-height: 1.4;">${esc(project.description.substring(0, 150))}${project.description.length > 150 ? "..." : ""}</p>

@@ -42,6 +42,9 @@ const OPTIONAL_CSV_HEADERS = [
   "adminArea2",
   "districtCounty",
   "donor",
+  // Optional grant / funding / budget-line reference code. Not required,
+  // not a filter, not reported on. Stored verbatim on the Project row.
+  "donorFundingCode",
   "locationName",
   "dataSource",
   "contactEmail",
@@ -73,6 +76,8 @@ interface CSVRow {
   // New reference-data columns. Supplied by name; resolved to ids below.
   districtCounty?: string;
   donor?: string;
+  // Optional free-text donor / grant / funding reference code.
+  donorFundingCode?: string;
 }
 
 interface RowError {
@@ -366,6 +371,9 @@ export async function POST(request: NextRequest) {
         locationName: row.locationName,
         dataSource: row.dataSource,
         contactEmail: row.contactEmail,
+        // Optional free-text code — passed through to validateProject
+        // which trims, caps length at 120, and stores null when blank.
+        donorFundingCode: row.donorFundingCode,
       };
 
       const validation = validateProject(projectData);

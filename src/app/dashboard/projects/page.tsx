@@ -36,6 +36,7 @@ interface Project {
   locationName: string | null;
   administrativeAreaId: string | null;
   donorId: string | null;
+  donorFundingCode: string | null;
   organization: {
     id: string;
     name: string;
@@ -126,6 +127,9 @@ export default function ProjectsPage() {
     locationName: "",
     administrativeAreaId: "",
     donorId: "",
+    // Optional grant / funding / budget-line reference code. Kept here
+    // alongside Donor so the two travel together on save.
+    donorFundingCode: "",
   });
 
   const fetchData = async () => {
@@ -195,6 +199,7 @@ export default function ProjectsPage() {
       locationName: "",
       administrativeAreaId: "",
       donorId: "",
+      donorFundingCode: "",
     });
     setEditingProject(null);
   };
@@ -219,6 +224,7 @@ export default function ProjectsPage() {
         locationName: project.locationName || "",
         administrativeAreaId: project.administrativeAreaId || "",
         donorId: project.donorId || "",
+        donorFundingCode: project.donorFundingCode || "",
       });
     } else {
       resetForm();
@@ -245,6 +251,9 @@ export default function ProjectsPage() {
           longitude: Number.parseFloat(formData.longitude),
           administrativeAreaId: formData.administrativeAreaId || null,
           donorId: formData.donorId || null,
+          // Trim + normalise to null so the server validation helper
+          // always sees the same shape regardless of browser quirks.
+          donorFundingCode: formData.donorFundingCode.trim() || null,
         }),
       });
 
@@ -926,6 +935,36 @@ export default function ProjectsPage() {
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+
+                {/* Optional donor / funding / grant reference code.
+                    Intentionally NOT a filter, a report metric, or a data
+                    quality signal — it is metadata that lets users trace a
+                    project back to a specific donor grant line. See
+                    src/lib/validation.ts::validateProject. */}
+                <div
+                  className="grid gap-2"
+                  data-design-id="project-donor-funding-code-field"
+                >
+                  <Label htmlFor="donorFundingCode">
+                    Donor / Funding Code
+                    <span className="ml-1 text-xs font-normal text-slate-500">
+                      (optional)
+                    </span>
+                  </Label>
+                  <Input
+                    id="donorFundingCode"
+                    type="text"
+                    maxLength={120}
+                    value={formData.donorFundingCode}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        donorFundingCode: e.target.value,
+                      })
+                    }
+                    placeholder="e.g. Grant ID, donor reference, budget line, or funding code"
+                  />
                 </div>
               </div>
             </div>

@@ -10,10 +10,12 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  DONOR_FUNDING_CODE_MAX_LENGTH,
   parseOptionalPopulation,
   parseOptionalPopulationYear,
   validateAdministrativeArea,
   validateOrganization,
+  validateProject,
 } from "./validation";
 
 describe("parseOptionalPopulation", () => {
@@ -235,4 +237,87 @@ describe("validateOrganization (multi-country)", () => {
     expect(r.errors[0]).toMatch(/at least one country/i);
   });
 });
+});
+
+// -----------------------------------------------------------------------
+// validateProject — donorFundingCode (optional grant / funding / budget
+// line reference). Covers the acceptance criteria for the new field:
+//   - absent / blank / whitespace-only ⇒ stored as null
+//   - present ⇒ trimmed and stored verbatim
+//   - over-length ⇒ validation error
+// Everything else about validateProject is exercised via the existing
+// API-level integration tests.
+// -----------------------------------------------------------------------
+describe("validateProject (donorFundingCode)", () => {
+  const baseProject = {
+    title: "Demo",
+    description: "desc",
+    organizationId: "org_1",
+    countryCode: "US",
+    sectorKey: "HEALTH",
+    status: "ACTIVE",
+    startDate: "2024-01-01",
+    latitude: 40,
+    longitude: -74,
+  };
+
+  it("treats a missing donorFundingCode as null", () => {
+    const r = validateProject({ ...baseProject });
+    expect(r.valid).toBe(true);
+    expect(r.normalizedData?.donorFundingCode).toBeNull();
+  });
+
+  it("treats a blank / whitespace-only donorFundingCode as null", () => {
+    const r = validateProject({
+      ...baseProject,
+      donorFundingCode: "   \t \n  ",
+    });
+    expect(r.valid).toBe(true);
+    expect(r.normalizedData?.donorFundingCode).toBeNull();
+  });
+
+  it("trims surrounding whitespace and stores the verbatim code", () => {
+    const r = validateProject({
+      ...baseProject,
+      donorFundingCode: "  GRANT-2024-US-001  ",
+    });
+    expect(r.valid).toBe(true);
+    expect(r.normalizedData?.donorFundingCode).toBe("GRANT-2024-US-001");
+  });
+
+  it("accepts a code at the maximum allowed length", () => {
+    const max = "A".repeat(DONOR_FUNDING_CODE_MAX_LENGTH);
+    const r = validateProject({
+      ...baseProject,
+      donorFundingCode: max,
+    });
+    expect(r.valid).toBe(true);
+    expect(r.normalizedData?.donorFundingCode).toBe(max);
+  });
+
+  it("rejects a code longer than the configured maximum", () => {
+    const tooLong = "B".repeat(DONOR_FUNDING_CODE_MAX_LENGTH + 1);
+    const r = validateProject({
+      ...baseProject,
+      donorFundingCode: tooLong,
+    });
+    expect(r.valid).toBe(false);
+    expect(r.errors.join(" ")).toMatch(/donor \/ funding code/i);
+    // Other required fields were all provided, so the error must be the
+    // length error we just added and nothing else.
+    expect(r.errors).toHaveLength(1);
+  });
+
+  it("does not leak donorFundingCode into the existing required-field errors", () => {
+    // Missing required fields should still surface as their own errors,
+    // and the donorFundingCode path must not swallow them.
+    const r = validateProject({ donorFundingCode: "GRANT-1" });
+    expect(r.valid).toBe(false);
+    expect(r.errors.length).toBeGreaterThan(1);
+    // Sanity: the donor-funding-code length rule did NOT fire here, only
+    // the required-field rules should have.
+    expect(
+      r.errors.find((e) => /donor \/ funding code/i.test(e)),
+    ).toBeUndefined();
+  });
 });

@@ -37,6 +37,9 @@ interface Project {
   targetBeneficiaries: number | null;
   administrativeAreaId: string | null;
   donorId: string | null;
+  // Optional grant / funding / budget-line reference. Passed through to
+  // the map popup; never used for filtering or analytics.
+  donorFundingCode: string | null;
   organization: {
     id: string;
     name: string;

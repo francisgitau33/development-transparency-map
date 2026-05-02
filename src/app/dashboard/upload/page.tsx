@@ -52,8 +52,16 @@ interface UploadJob {
   uploadedBy: { email: string; displayName: string | null };
 }
 
-const CSV_TEMPLATE = `title,description,countryCode,sectorKey,status,startDate,endDate,latitude,longitude,budgetUsd,targetBeneficiaries,districtCounty,donor,locationName,dataSource,contactEmail
-"Sample Project","Description of the project",US,HEALTH,ACTIVE,2024-01-01,2024-12-31,40.7128,-74.0060,100000,1500,"New York County","USAID","New York, NY","Field Survey",contact@example.org`;
+// Downloadable CSV template.
+//
+// Required columns (enforced server-side before row work):
+//   title, countryCode, sectorKey, status, startDate, latitude, longitude
+//
+// All other columns — including `donorFundingCode` — are optional. Older
+// CSVs without this column continue to upload successfully; the server
+// treats a missing column as null.
+const CSV_TEMPLATE = `title,description,countryCode,sectorKey,status,startDate,endDate,latitude,longitude,budgetUsd,targetBeneficiaries,districtCounty,donor,donorFundingCode,locationName,dataSource,contactEmail
+"Sample Project","Description of the project",US,HEALTH,ACTIVE,2024-01-01,2024-12-31,40.7128,-74.0060,100000,1500,"New York County","USAID","GRANT-2024-US-001","New York, NY","Field Survey",contact@example.org`;
 
 export default function UploadPage() {
   const { isSystemOwner, user } = useAuth();

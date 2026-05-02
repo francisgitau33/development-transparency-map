@@ -44,6 +44,13 @@ export function normalizeCoordinate(value: unknown, precision = 6): number | nul
   return Math.round(num * 10 ** precision) / 10 ** precision;
 }
 
+/**
+ * Maximum character length for the optional donor / funding / grant
+ * reference code on a project. Matches the guidance in the feature brief
+ * and mirrors the 120-char cap we use for other free-text identifiers.
+ */
+export const DONOR_FUNDING_CODE_MAX_LENGTH = 120;
+
 export function validateProject(data: Record<string, unknown>): ValidationResult {
   const errors: string[] = [];
 
@@ -56,6 +63,21 @@ export function validateProject(data: Record<string, unknown>): ValidationResult
   const longitude = normalizeCoordinate(data.longitude);
   const startDate = normalizeDate(data.startDate);
   const status = normalizeString(data.status).toUpperCase();
+
+  // Optional donor / funding code — whitespace-trimmed, length-capped.
+  // Stored as null when blank to match the rest of the project schema.
+  const donorFundingCodeRaw = normalizeString(data.donorFundingCode);
+  const donorFundingCode = donorFundingCodeRaw.length === 0
+    ? null
+    : donorFundingCodeRaw;
+  if (
+    donorFundingCode !== null &&
+    donorFundingCode.length > DONOR_FUNDING_CODE_MAX_LENGTH
+  ) {
+    errors.push(
+      `Donor / Funding Code must be ${DONOR_FUNDING_CODE_MAX_LENGTH} characters or fewer`,
+    );
+  }
 
   if (!title) errors.push("Title is required");
   if (!description) errors.push("Description is required");
@@ -100,6 +122,7 @@ export function validateProject(data: Record<string, unknown>): ValidationResult
           locationName: normalizeString(data.locationName) || null,
           dataSource: normalizeString(data.dataSource) || null,
           contactEmail: normalizeEmail(data.contactEmail) || null,
+          donorFundingCode,
         }
       : undefined,
   };

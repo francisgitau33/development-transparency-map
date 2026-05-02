@@ -183,6 +183,10 @@ model Project {
   locationName         String?
   dataSource           String?
   contactEmail         String?
+  // Optional donor / funding / grant reference code. NOT used by reports,
+  // analytics, filters, charts, or data-quality scoring — see
+  // src/lib/validation.ts::validateProject and the Reports page guard.
+  donorFundingCode     String?
   createdByUserId      String
   createdAt            DateTime          @default(now())
   updatedAt            DateTime          @updatedAt

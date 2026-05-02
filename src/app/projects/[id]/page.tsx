@@ -39,6 +39,7 @@ interface Project {
   locationName: string | null;
   dataSource: string | null;
   contactEmail: string | null;
+  donorFundingCode: string | null;
   createdAt: string;
   organization: {
     id: string;
@@ -482,6 +483,16 @@ export default function ProjectDetailPage({
                             {project.donor.donorType
                               ? ` · ${project.donor.donorType}`
                               : ""}
+                          </p>
+                        </div>
+                      )}
+                      {project.donorFundingCode && (
+                        <div data-design-id="project-donor-funding-code">
+                          <p className="text-sm text-slate-500">
+                            Donor / Funding Code
+                          </p>
+                          <p className="font-medium text-slate-900 break-words">
+                            {project.donorFundingCode}
                           </p>
                         </div>
                       )}
