@@ -48,6 +48,7 @@ import {
   AlertTriangle,
   Building2,
   CalendarClock,
+  ChevronDown,
   DollarSign,
   Filter,
   FolderOpen,
@@ -1257,6 +1258,90 @@ interface CountryContextResponse {
   notes: string[];
 }
 
+// =============================================================================
+// ReportSectionDisclosure — accessible, multi-open collapsible card used for
+// the analytical sections on the Reports page. Each instance manages its own
+// open/closed state (via local useState keyed by id), so multiple disclosures
+// can be open simultaneously — this is NOT a single-open accordion.
+//
+// Accessibility:
+//   • The trigger is a real <button>, so Enter / Space / focus ring all work
+//     for free.
+//   • aria-expanded reflects the current state.
+//   • aria-controls points at the collapsible region, which in turn exposes
+//     role="region" and aria-labelledby for screen readers.
+//
+// Behaviour:
+//   • Collapsed state shows title + description + a chevron indicator.
+//   • Expanded state reveals the provided children in full, with no nested
+//     scroll container (children control their own overflow where needed).
+//   • defaultOpen lets callers render a section open on first paint.
+// =============================================================================
+function ReportSectionDisclosure({
+  id,
+  title,
+  description,
+  defaultOpen = false,
+  children,
+}: {
+  id: string;
+  title: string;
+  description: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const regionId = `${id}-region`;
+  const headingId = `${id}-heading`;
+
+  return (
+    <section
+      data-design-id={id}
+      aria-labelledby={headingId}
+      className="rounded-lg border border-slate-200 bg-white shadow-sm"
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-controls={regionId}
+        className="w-full flex items-start justify-between gap-4 px-4 py-4 md:px-5 md:py-5 text-left rounded-lg hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2"
+      >
+        <div className="min-w-0 space-y-1">
+          <h2
+            id={headingId}
+            className="text-lg font-semibold text-slate-900"
+          >
+            {title}
+          </h2>
+          <p className="text-sm text-slate-600 max-w-3xl">{description}</p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0 pt-1">
+          <span className="hidden sm:inline text-xs font-medium text-slate-500">
+            {open ? "Collapse" : "Expand"}
+          </span>
+          <ChevronDown
+            aria-hidden="true"
+            className={`w-5 h-5 text-slate-500 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+          />
+        </div>
+      </button>
+      {open && (
+        // Disclosure panel — referenced by the trigger via aria-controls. A
+        // plain <div> (rather than role="region") is intentional per the
+        // WAI-ARIA disclosure pattern: the outer <section> already carries
+        // the landmark and aria-labelledby relationship.
+        <div
+          id={regionId}
+          className="px-4 pb-5 pt-2 md:px-5 md:pb-6 border-t border-slate-100 space-y-4 overflow-x-auto"
+        >
+          {children}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default function ReportsPage() {
   const { user, isSystemOwner } = useAuth();
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
@@ -1874,26 +1959,13 @@ export default function ReportsPage() {
           </section>
 
           {/* -------------------------------------------------------------- */}
-          {/* 3. Development Coverage                                        */}
+          {/* 3. Development Coverage (collapsible)                          */}
           {/* -------------------------------------------------------------- */}
-          <section
-            data-design-id="reports-coverage"
-            aria-labelledby="reports-coverage-heading"
-            className="space-y-3"
+          <ReportSectionDisclosure
+            id="reports-coverage"
+            title="Development Coverage"
+            description="Shows geographic and sector distribution of recorded projects, including where development activity is concentrated or thinly represented."
           >
-            <div className="space-y-1">
-              <h2
-                id="reports-coverage-heading"
-                className="text-lg font-semibold text-slate-900"
-              >
-                Development Coverage
-              </h2>
-              <p className="text-sm text-slate-600 max-w-3xl">
-                Where development activity is concentrated geographically, by
-                sector, and by implementing organisation.
-              </p>
-            </div>
-
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Projects by Sector - donut */}
               <Card data-design-id="chart-projects-by-sector">
@@ -2086,29 +2158,21 @@ export default function ReportsPage() {
                   sync with the Spatial section further down. */}
               <GeographicCoverageRatioCard spatial={spatial} />
             </div>
-          </section>
+          </ReportSectionDisclosure>
 
           {/* -------------------------------------------------------------- */}
-          {/* 4. Funding Intelligence                                        */}
+          {/* 4. Funding Intelligence (collapsible)                          */}
           {/* -------------------------------------------------------------- */}
-          <section
-            data-design-id="reports-funding-intelligence"
-            aria-labelledby="reports-funding-heading"
-            className="space-y-3"
+          <ReportSectionDisclosure
+            id="reports-funding-intelligence"
+            title="Funding Intelligence"
+            description="Shows budget distribution, donor concentration, funding patterns, and possible funding cliff issues."
           >
-            <div className="space-y-1">
-              <h2
-                id="reports-funding-heading"
-                className="text-lg font-semibold text-slate-900"
-              >
-                Funding Intelligence
-              </h2>
-              <p className="text-sm text-slate-600 max-w-3xl">
-                Who is funding what, where funding is concentrated, and whether
-                recorded funding appears concentrated among a small number of
-                donors.
-              </p>
-            </div>
+            <p className="text-sm text-slate-600 max-w-3xl">
+              Who is funding what, where funding is concentrated, and whether
+              recorded funding appears concentrated among a small number of
+              donors.
+            </p>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Budget by Donor - donut + legend */}
@@ -2400,27 +2464,19 @@ export default function ReportsPage() {
                 rows={analytics.budgetPipelineByStatus}
               />
             </div>
-          </section>
+          </ReportSectionDisclosure>
 
           {/* -------------------------------------------------------------- */}
-          {/* 5. Efficiency & Reach                                          */}
+          {/* 5. Efficiency & Reach (collapsible)                            */}
           {/* -------------------------------------------------------------- */}
-          <section
-            data-design-id="reports-efficiency-reach"
-            aria-labelledby="reports-efficiency-heading"
-            className="space-y-3"
+          <ReportSectionDisclosure
+            id="reports-efficiency-reach"
+            title="Efficiency & Reach"
+            description="Shows cost, reach, beneficiaries, value-for-money indicators, and delivery scale where data is available."
           >
-            <div className="space-y-1">
-              <h2
-                id="reports-efficiency-heading"
-                className="text-lg font-semibold text-slate-900"
-              >
-                Efficiency &amp; Reach
-              </h2>
-              <p className="text-sm text-slate-600 max-w-3xl">
-                {analytics.costPerBeneficiary.note}
-              </p>
-            </div>
+            <p className="text-sm text-slate-600 max-w-3xl">
+              {analytics.costPerBeneficiary.note}
+            </p>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <CpbCard
@@ -2529,31 +2585,25 @@ export default function ReportsPage() {
               emptyMessage="No projects meet the watchlist criteria for the current filters."
               subtle
             />
-          </section>
+          </ReportSectionDisclosure>
 
           {/* -------------------------------------------------------------- */}
-          {/* 6. Risk & Vulnerability (Funding Cliffs)                       */}
+          {/* 6. Risk & Vulnerability — Funding Cliffs (collapsible)         */}
+          {/* Spatial Vulnerability has been promoted to its own top-level   */}
+          {/* disclosure below so it can be opened independently.            */}
           {/* -------------------------------------------------------------- */}
-          <section
-            data-design-id="reports-risk-vulnerability"
-            aria-labelledby="reports-risk-heading"
-            className="space-y-4"
+          <ReportSectionDisclosure
+            id="reports-risk-vulnerability"
+            title="Risk & Vulnerability"
+            description="Shows projects nearing end date, critical service risks, future vulnerability, and possible continuity gaps."
           >
-            <div className="space-y-1">
-              <h2
-                id="reports-risk-heading"
-                className="text-lg font-semibold text-slate-900"
-              >
-                Risk &amp; Vulnerability
-              </h2>
-              <p className="text-sm text-slate-600 max-w-3xl">
-                Funding cliff risk indicates where recorded active funding is
-                scheduled to end without equivalent recorded planned
-                replacement funding. It does not prove that services will stop
-                or that donors have withdrawn. Adjust the Funding Cliff Window
-                filter above to change the horizon.
-              </p>
-            </div>
+            <p className="text-sm text-slate-600 max-w-3xl">
+              Funding cliff risk indicates where recorded active funding is
+              scheduled to end without equivalent recorded planned replacement
+              funding. It does not prove that services will stop or that
+              donors have withdrawn. Adjust the Funding Cliff Window filter
+              above to change the horizon.
+            </p>
 
             {cliffsLoading && (
               <LoadingState message="Loading funding cliff analytics..." />
@@ -2568,63 +2618,67 @@ export default function ReportsPage() {
                 fundingCliffWindow={fundingCliffWindow}
               />
             )}
-
-            {/* -------------------------------------------------------- */}
-            {/* Spatial Vulnerability & Low Recorded Coverage            */}
-            {/* -------------------------------------------------------- */}
-            <div
-              data-design-id="reports-spatial-vulnerability"
-              aria-labelledby="reports-spatial-heading"
-              className="pt-4 space-y-4"
-            >
-              <div className="space-y-1">
-                <h3
-                  id="reports-spatial-heading"
-                  className="text-base font-semibold text-slate-900 flex items-center gap-2"
-                >
-                  <MapPin className="w-5 h-5 text-slate-500" />
-                  Spatial Vulnerability &amp; Low Recorded Coverage
-                </h3>
-                <p className="text-sm text-slate-600 max-w-3xl">
-                  This analysis identifies areas with low or no recorded
-                  project coverage within the Development Transparency Map. It
-                  does not prove that no development activity exists in those
-                  areas.
-                </p>
-              </div>
-
-              {spatialLoading && (
-                <LoadingState message="Loading spatial vulnerability analytics..." />
-              )}
-              {spatialError && (
-                <ErrorState message={spatialError} onRetry={fetchSpatial} />
-              )}
-
-              {!spatialLoading && !spatialError && spatial && (
-                <SpatialVulnerabilitySection
-                  spatial={spatial}
-                  countrySelected={countryCode !== "_all"}
-                  districtSelected={administrativeAreaId !== "_all"}
-                />
-              )}
-            </div>
-          </section>
+          </ReportSectionDisclosure>
 
           {/* -------------------------------------------------------------- */}
-          {/* 7. Data Quality                                                */}
+          {/* 7. Spatial Vulnerability & Low Recorded Coverage (collapsible) */}
           {/* -------------------------------------------------------------- */}
-          <section
-            data-design-id="reports-data-quality"
-            aria-labelledby="reports-data-quality-heading"
-            className="space-y-3"
+          <ReportSectionDisclosure
+            id="reports-spatial-vulnerability"
+            title="Spatial Vulnerability & Low Recorded Coverage"
+            description="Shows areas with low recorded coverage, underserved locations, or geographic gaps in project presence."
           >
-            <h2
-              id="reports-data-quality-heading"
-              className="text-lg font-semibold text-slate-900"
-            >
-              Data Quality
-            </h2>
+            <p className="text-sm text-slate-600 max-w-3xl">
+              This analysis identifies areas with low or no recorded project
+              coverage within the Development Transparency Map. It does not
+              prove that no development activity exists in those areas.
+            </p>
 
+            {spatialLoading && (
+              <LoadingState message="Loading spatial vulnerability analytics..." />
+            )}
+            {spatialError && (
+              <ErrorState message={spatialError} onRetry={fetchSpatial} />
+            )}
+
+            {!spatialLoading && !spatialError && spatial && (
+              <SpatialVulnerabilitySection
+                spatial={spatial}
+                countrySelected={countryCode !== "_all"}
+                districtSelected={administrativeAreaId !== "_all"}
+              />
+            )}
+          </ReportSectionDisclosure>
+
+          {/* -------------------------------------------------------------- */}
+          {/* 8. Population Adjusted Metrics (collapsible)                   */}
+          {/* Previously "Part F" inside the Spatial Vulnerability section.  */}
+          {/* -------------------------------------------------------------- */}
+          <ReportSectionDisclosure
+            id="reports-population-adjusted-metrics"
+            title="Population Adjusted Metrics"
+            description="Shows coverage and funding relative to population, helping users compare areas fairly rather than only by absolute project count or budget."
+          >
+            {spatialLoading && (
+              <LoadingState message="Loading population-adjusted metrics..." />
+            )}
+            {spatialError && (
+              <ErrorState message={spatialError} onRetry={fetchSpatial} />
+            )}
+
+            {!spatialLoading && !spatialError && spatial && (
+              <PopulationAdjustedMetricsSection spatial={spatial} />
+            )}
+          </ReportSectionDisclosure>
+
+          {/* -------------------------------------------------------------- */}
+          {/* 9. Data Quality (collapsible)                                  */}
+          {/* -------------------------------------------------------------- */}
+          <ReportSectionDisclosure
+            id="reports-data-quality"
+            title="Data Quality"
+            description="Shows missing fields, incomplete records, weak geolocation, poor budget data, and other limitations affecting interpretation."
+          >
             <Card>
               <CardHeader className="pb-3">
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
@@ -2954,7 +3008,11 @@ export default function ReportsPage() {
                 data={countryContext}
               />
             )}
-          </section>
+          </ReportSectionDisclosure>
+
+          {/* Extra bottom spacer so the final expanded disclosure is never
+              clipped by the viewport on short screens. */}
+          <div aria-hidden="true" className="h-12" />
         </>
       )}
     </div>
@@ -5038,6 +5096,11 @@ function SpatialIndicatorTable({ rows }: { rows: SpatialIndicatorRow[] }) {
 /**
  * Main Spatial Vulnerability body, rendered once data loads. Organised as a
  * stack of cards so each widget can individually empty-state.
+ *
+ * NOTE: Part F (population-adjusted metrics) has been split out into the
+ * sibling `PopulationAdjustedMetricsSection` component so that the Reports
+ * page can surface it as its own collapsible disclosure. The analytics and
+ * data contract are unchanged.
  */
 function SpatialVulnerabilitySection({
   spatial,
@@ -5190,25 +5253,60 @@ function SpatialVulnerabilitySection({
         </CardContent>
       </Card>
 
-      {/* ------------------------------------------------------------------ */}
-      {/* Part F — Population-adjusted spatial metrics                       */}
-      {/* ------------------------------------------------------------------ */}
-      <div
-        data-design-id="spatial-population-adjusted"
-        className="pt-2 space-y-1"
+      {/* 8. Map view placeholder — kept explicit so the roadmap is visible. */}
+      <Card
+        aria-disabled="true"
+        data-design-id="spatial-map-placeholder"
+        className="border-dashed border-slate-300 bg-slate-50/60"
       >
-        <h4 className="text-sm font-semibold text-slate-900">
-          Population-adjusted metrics
-        </h4>
-        <div className="flex items-start gap-2 text-xs text-slate-600 bg-sky-50 border border-sky-200 rounded-md px-3 py-2">
-          <Info className="w-4 h-4 mt-0.5 text-sky-600 shrink-0" />
-          <span>
-            Population-adjusted metrics compare recorded project data
-            against estimated District / County population values entered
-            in the platform. They do not prove need, deprivation, or
-            underfunding on their own.
-          </span>
-        </div>
+        <CardHeader className="pb-2">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <MapPin className="w-5 h-5 text-slate-400 shrink-0" />
+              <CardTitle className="text-base text-slate-600 truncate">
+                District shading / heatmap
+              </CardTitle>
+            </div>
+            <Badge
+              variant="outline"
+              className="bg-white text-slate-500 border-slate-300 whitespace-nowrap"
+            >
+              <Lock className="w-3 h-3 mr-1" aria-hidden="true" />
+              Planned
+            </Badge>
+          </div>
+          <CardDescription className="text-slate-500">
+            District shading / heatmap planned for future phase pending
+            boundary data. No external boundary datasets are fetched in this
+            release.
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    </div>
+  );
+}
+
+/**
+ * Population-adjusted spatial metrics (formerly "Part F" inside
+ * SpatialVulnerabilitySection). Split out as its own component so the Reports
+ * page can render it inside a dedicated collapsible disclosure. The data
+ * contract and widget behaviour are unchanged.
+ */
+function PopulationAdjustedMetricsSection({
+  spatial,
+}: {
+  spatial: SpatialVulnerability;
+}) {
+  return (
+    <div className="space-y-6" data-design-id="spatial-population-adjusted">
+      <div className="flex items-start gap-2 text-xs text-slate-600 bg-sky-50 border border-sky-200 rounded-md px-3 py-2">
+        <Info className="w-4 h-4 mt-0.5 text-sky-600 shrink-0" />
+        <span>
+          Population-adjusted metrics compare recorded project data against
+          estimated District / County population values entered in the
+          platform. They do not prove need, deprivation, or underfunding on
+          their own.
+        </span>
       </div>
 
       {/* F.1 — Recorded Investment per Capita */}
@@ -5299,36 +5397,6 @@ function SpatialVulnerabilitySection({
             rows={spatial.highPopulationLowCoverageWatchlist}
           />
         </CardContent>
-      </Card>
-
-      {/* 8. Map view placeholder — kept explicit so the roadmap is visible. */}
-      <Card
-        aria-disabled="true"
-        data-design-id="spatial-map-placeholder"
-        className="border-dashed border-slate-300 bg-slate-50/60"
-      >
-        <CardHeader className="pb-2">
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex items-center gap-2 min-w-0">
-              <MapPin className="w-5 h-5 text-slate-400 shrink-0" />
-              <CardTitle className="text-base text-slate-600 truncate">
-                District shading / heatmap
-              </CardTitle>
-            </div>
-            <Badge
-              variant="outline"
-              className="bg-white text-slate-500 border-slate-300 whitespace-nowrap"
-            >
-              <Lock className="w-3 h-3 mr-1" aria-hidden="true" />
-              Planned
-            </Badge>
-          </div>
-          <CardDescription className="text-slate-500">
-            District shading / heatmap planned for future phase pending
-            boundary data. No external boundary datasets are fetched in this
-            release.
-          </CardDescription>
-        </CardHeader>
       </Card>
     </div>
   );
