@@ -11,11 +11,16 @@
 import { describe, expect, it } from "vitest";
 import {
   DONOR_FUNDING_CODE_MAX_LENGTH,
+  TEAM_MEMBER_BIO_MAX_LENGTH,
+  TEAM_MEMBER_NAME_MAX_LENGTH,
+  TEAM_MEMBER_ROLE_MAX_LENGTH,
+  TEAM_MEMBER_URL_MAX_LENGTH,
   parseOptionalPopulation,
   parseOptionalPopulationYear,
   validateAdministrativeArea,
   validateOrganization,
   validateProject,
+  validateTeamMember,
 } from "./validation";
 
 describe("parseOptionalPopulation", () => {
@@ -319,5 +324,135 @@ describe("validateProject (donorFundingCode)", () => {
     expect(
       r.errors.find((e) => /donor \/ funding code/i.test(e)),
     ).toBeUndefined();
+  });
+});
+
+describe("validateTeamMember", () => {
+  const base = { name: "Ada Lovelace", role: "Advisor" };
+
+  it("accepts a minimal valid row and normalises optional strings to null", () => {
+    const r = validateTeamMember({ ...base });
+    expect(r.valid).toBe(true);
+    expect(r.normalizedData).toMatchObject({
+      name: "Ada Lovelace",
+      role: "Advisor",
+      bio: null,
+      photoUrl: null,
+      linkedinUrl: null,
+      displayOrder: 0,
+      active: true,
+    });
+  });
+
+  it("requires name and role", () => {
+    const r = validateTeamMember({ name: "  ", role: "" });
+    expect(r.valid).toBe(false);
+    expect(r.errors).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/name is required/i),
+        expect.stringMatching(/role is required/i),
+      ]),
+    );
+  });
+
+  it("caps name, role, and bio at their max lengths", () => {
+    const r = validateTeamMember({
+      name: "x".repeat(TEAM_MEMBER_NAME_MAX_LENGTH + 1),
+      role: "y".repeat(TEAM_MEMBER_ROLE_MAX_LENGTH + 1),
+      bio: "z".repeat(TEAM_MEMBER_BIO_MAX_LENGTH + 1),
+    });
+    expect(r.valid).toBe(false);
+    expect(r.errors).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/name must be /i),
+        expect.stringMatching(/role must be /i),
+        expect.stringMatching(/bio must be /i),
+      ]),
+    );
+  });
+
+  it("accepts http(s) URLs and rejects anything else", () => {
+    const ok = validateTeamMember({
+      ...base,
+      photoUrl: "https://example.com/ada.jpg",
+      linkedinUrl: "http://linkedin.com/in/ada",
+    });
+    expect(ok.valid).toBe(true);
+    expect(ok.normalizedData).toMatchObject({
+      photoUrl: "https://example.com/ada.jpg",
+      linkedinUrl: "http://linkedin.com/in/ada",
+    });
+
+    const badScheme = validateTeamMember({
+      ...base,
+      photoUrl: "javascript:alert(1)",
+    });
+    expect(badScheme.valid).toBe(false);
+    expect(badScheme.errors.join(" ")).toMatch(/photo url/i);
+
+    const notAUrl = validateTeamMember({
+      ...base,
+      photoUrl: "not a url",
+    });
+    expect(notAUrl.valid).toBe(false);
+  });
+
+  it("rejects URLs beyond the max length", () => {
+    const tooLong = `https://example.com/${"a".repeat(TEAM_MEMBER_URL_MAX_LENGTH)}`;
+    const r = validateTeamMember({ ...base, photoUrl: tooLong });
+    expect(r.valid).toBe(false);
+    expect(r.errors.join(" ")).toMatch(/photo url/i);
+  });
+
+  it("treats displayOrder undefined/empty as 0 and rejects negatives / non-integers", () => {
+    expect(validateTeamMember({ ...base }).normalizedData?.displayOrder).toBe(
+      0,
+    );
+    expect(
+      validateTeamMember({ ...base, displayOrder: "" }).normalizedData
+        ?.displayOrder,
+    ).toBe(0);
+    expect(
+      validateTeamMember({ ...base, displayOrder: 3 }).normalizedData
+        ?.displayOrder,
+    ).toBe(3);
+    expect(validateTeamMember({ ...base, displayOrder: -1 }).valid).toBe(
+      false,
+    );
+    expect(validateTeamMember({ ...base, displayOrder: 1.5 }).valid).toBe(
+      false,
+    );
+    expect(
+      validateTeamMember({ ...base, displayOrder: "abc" }).valid,
+    ).toBe(false);
+  });
+
+  it("treats active explicitly false as false and everything else as true", () => {
+    expect(
+      validateTeamMember({ ...base, active: false }).normalizedData?.active,
+    ).toBe(false);
+    expect(
+      validateTeamMember({ ...base, active: true }).normalizedData?.active,
+    ).toBe(true);
+    // Omitted / undefined should default to true for a newly added member.
+    expect(validateTeamMember({ ...base }).normalizedData?.active).toBe(true);
+  });
+
+  it("trims name, role, bio, and URL values before storing", () => {
+    const r = validateTeamMember({
+      name: "  Ada  ",
+      role: " Advisor ",
+      bio: " Built the first compiler. ",
+      photoUrl: "   https://example.com/a.jpg  ",
+      linkedinUrl: "  https://www.linkedin.com/in/ada ",
+    });
+    expect(r.valid).toBe(true);
+    expect(r.normalizedData).toMatchObject({
+      name: "Ada",
+      role: "Advisor",
+      bio: "Built the first compiler.",
+      photoUrl: "https://example.com/a.jpg",
+      linkedinUrl: "https://www.linkedin.com/in/ada",
+    });
   });
 });

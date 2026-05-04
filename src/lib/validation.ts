@@ -511,3 +511,119 @@ export function validateOrganization(data: Record<string, unknown>): ValidationR
       : undefined,
   };
 }
+
+// ---------------------------------------------------------------------------
+// TeamMember validation (CMS-managed "Our Team" page).
+//
+// Required:   name (≤ 160 chars), role (≤ 160 chars)
+// Optional:   bio (≤ 4000 chars), photoUrl, linkedinUrl
+// Flags:      displayOrder (integer ≥ 0, defaults to 0)
+//             active (boolean, defaults to true)
+//
+// URL fields are accepted only as http:// or https:// absolute URLs, and
+// only when <= 2048 chars. Empty string is normalised to null. There is no
+// file-upload pipeline in this app (see next.config.js `images.unoptimized:
+// true`), so photoUrl is rendered with a plain <img> and any fetchable URL
+// works. We still reject non-URL junk at the validator boundary so bad
+// data can never land in the public page.
+// ---------------------------------------------------------------------------
+export const TEAM_MEMBER_NAME_MAX_LENGTH = 160;
+export const TEAM_MEMBER_ROLE_MAX_LENGTH = 160;
+export const TEAM_MEMBER_BIO_MAX_LENGTH = 4000;
+export const TEAM_MEMBER_URL_MAX_LENGTH = 2048;
+
+function normalizeHttpUrlOrNull(
+  value: unknown,
+  fieldLabel: string,
+): { value: string | null; error: string | null } {
+  const trimmed = normalizeString(value);
+  if (trimmed.length === 0) return { value: null, error: null };
+  if (trimmed.length > TEAM_MEMBER_URL_MAX_LENGTH) {
+    return {
+      value: null,
+      error: `${fieldLabel} must be ${TEAM_MEMBER_URL_MAX_LENGTH} characters or fewer`,
+    };
+  }
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return {
+        value: null,
+        error: `${fieldLabel} must be an http(s) URL`,
+      };
+    }
+    return { value: trimmed, error: null };
+  } catch {
+    return { value: null, error: `${fieldLabel} must be a valid URL` };
+  }
+}
+
+export function validateTeamMember(
+  data: Record<string, unknown>,
+): ValidationResult {
+  const errors: string[] = [];
+
+  const name = normalizeString(data.name);
+  if (name.length === 0) {
+    errors.push("Name is required");
+  } else if (name.length > TEAM_MEMBER_NAME_MAX_LENGTH) {
+    errors.push(
+      `Name must be ${TEAM_MEMBER_NAME_MAX_LENGTH} characters or fewer`,
+    );
+  }
+
+  const role = normalizeString(data.role);
+  if (role.length === 0) {
+    errors.push("Role is required");
+  } else if (role.length > TEAM_MEMBER_ROLE_MAX_LENGTH) {
+    errors.push(
+      `Role must be ${TEAM_MEMBER_ROLE_MAX_LENGTH} characters or fewer`,
+    );
+  }
+
+  const bioRaw = normalizeString(data.bio);
+  let bio: string | null = null;
+  if (bioRaw.length > 0) {
+    if (bioRaw.length > TEAM_MEMBER_BIO_MAX_LENGTH) {
+      errors.push(
+        `Bio must be ${TEAM_MEMBER_BIO_MAX_LENGTH} characters or fewer`,
+      );
+    } else {
+      bio = bioRaw;
+    }
+  }
+
+  const photo = normalizeHttpUrlOrNull(data.photoUrl, "Photo URL");
+  if (photo.error) errors.push(photo.error);
+  const linkedin = normalizeHttpUrlOrNull(data.linkedinUrl, "LinkedIn URL");
+  if (linkedin.error) errors.push(linkedin.error);
+
+  let displayOrder = 0;
+  if (data.displayOrder !== undefined && data.displayOrder !== null && data.displayOrder !== "") {
+    const parsed = Number(data.displayOrder);
+    if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 0) {
+      errors.push("Display order must be a non-negative integer");
+    } else {
+      displayOrder = parsed;
+    }
+  }
+
+  const active = data.active === undefined ? true : data.active !== false;
+
+  return {
+    valid: errors.length === 0,
+    errors,
+    normalizedData:
+      errors.length === 0
+        ? {
+            name,
+            role,
+            bio,
+            photoUrl: photo.value,
+            linkedinUrl: linkedin.value,
+            displayOrder,
+            active,
+          }
+        : undefined,
+  };
+}

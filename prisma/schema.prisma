@@ -393,6 +393,27 @@ model CmsAbout {
   updatedBy User? @relation("UpdatedBy", fields: [updatedByUserId], references: [id])
 }
 
+// Our Team — public CMS-managed list of team members. Only SYSTEM_OWNERs
+// can mutate rows; the public GET endpoint returns active members only,
+// ordered by (displayOrder asc, name asc). Photos are stored as free-form
+// URLs (the platform has no built-in file-upload pipeline — Next.js is
+// configured with `images.unoptimized: true`, so a plain <img src> works
+// with any externally-hosted image without a remote-patterns entry).
+model TeamMember {
+  id           String   @id @default(cuid())
+  name         String
+  role         String
+  bio          String?
+  photoUrl     String?
+  linkedinUrl  String?
+  displayOrder Int      @default(0)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([active, displayOrder])
+}
+
 // Upload jobs for bulk CSV
 enum UploadStatus {
   PENDING

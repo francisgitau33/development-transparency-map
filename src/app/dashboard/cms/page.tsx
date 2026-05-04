@@ -13,6 +13,7 @@ import {
   ArrowRight,
   Map as MapIcon,
   HandCoins,
+  Users,
 } from "lucide-react";
 
 export default function CMSPage() {
@@ -149,6 +150,27 @@ export default function CMSPage() {
             <Link href="/dashboard/cms/about">
               <Button className="w-full">
                 Edit About Page
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        <Card data-design-id="cms-team-card" className="hover:shadow-lg transition-shadow">
+          <CardHeader>
+            <div className="w-12 h-12 bg-rose-100 rounded-lg flex items-center justify-center mb-4">
+              <Users className="w-6 h-6 text-rose-600" />
+            </div>
+            <CardTitle>Our Team</CardTitle>
+            <CardDescription>
+              Add, edit, publish, and remove team members shown on the
+              public Our Team page.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/dashboard/cms/team">
+              <Button className="w-full">
+                Manage Team
                 <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
             </Link>

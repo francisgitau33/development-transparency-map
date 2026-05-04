@@ -197,3 +197,143 @@ export async function PUT(
     );
   }
 }
+
+/**
+ * DELETE /api/organizations/[id]
+ *
+ * Hard-deletes an Organization row. SYSTEM_OWNER only.
+ *
+ * Dependency guard (fail-closed): the delete is REFUSED with 409 if the
+ * organisation still has any linked Projects OR attached Users. The UI
+ * surfaces the counts so a SYSTEM_OWNER can decide whether to detach /
+ * reassign first. This mirrors the reference-data delete contract
+ * (countries / sectors / donors / administrative areas) and keeps
+ * cascade-deletion firmly opt-in rather than implicit.
+ *
+ * On a successful delete we also remove the OrganizationCountry join
+ * rows for the same organisation to keep the join table consistent —
+ * those rows are safe to delete because the FK target is gone.
+ *
+ * Audit: writes a single ORGANIZATION_DELETED event with the captured
+ * name + type + dependency counts for post-hoc review.
+ */
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { id } = await params;
+
+    const user = await prisma.user.findUnique({
+      where: { id: session.userId },
+      include: { role: true },
+    });
+
+    if (user?.role?.role !== "SYSTEM_OWNER") {
+      return NextResponse.json(
+        { error: "Only system owners can delete organizations" },
+        { status: 403 },
+      );
+    }
+
+    const organization = await prisma.organization.findUnique({
+      where: { id },
+      include: {
+        _count: {
+          select: { projects: true, users: true },
+        },
+      },
+    });
+
+    if (!organization) {
+      return NextResponse.json(
+        { error: "Organization not found" },
+        { status: 404 },
+      );
+    }
+
+    const projectCount = organization._count?.projects ?? 0;
+    const userCount = organization._count?.users ?? 0;
+
+    // Dependency guard — refuse and surface counts so the caller can
+    // reassign / delete the linked records first.
+    if (projectCount > 0 || userCount > 0) {
+      const blockers: string[] = [];
+      if (projectCount > 0) {
+        blockers.push(
+          `${projectCount} linked project${projectCount === 1 ? "" : "s"}`,
+        );
+      }
+      if (userCount > 0) {
+        blockers.push(
+          `${userCount} assigned user${userCount === 1 ? "" : "s"}`,
+        );
+      }
+      await logAudit({
+        actorId: session.userId,
+        actorEmail: user.email,
+        action: AUDIT_ACTIONS.ORGANIZATION_DELETED,
+        entityType: "Organization",
+        entityId: organization.id,
+        payload: {
+          name: organization.name,
+          type: organization.type,
+          result: "blocked",
+          projects: projectCount,
+          users: userCount,
+        },
+      });
+      return NextResponse.json(
+        {
+          error: `This organization has ${blockers.join(" and ")}. Delete or reassign them before deleting the organization.`,
+          details: {
+            projects: projectCount,
+            users: userCount,
+          },
+        },
+        { status: 409 },
+      );
+    }
+
+    await prisma.$transaction(async (tx) => {
+      // Remove join rows first; FK from OrganizationCountry → Organization
+      // could otherwise block the delete depending on schema cascade.
+      await tx.organizationCountry.deleteMany({
+        where: { organizationId: id },
+      });
+      await tx.organization.delete({ where: { id } });
+    });
+
+    await logAudit({
+      actorId: session.userId,
+      actorEmail: user.email,
+      action: AUDIT_ACTIONS.ORGANIZATION_DELETED,
+      entityType: "Organization",
+      entityId: organization.id,
+      payload: {
+        name: organization.name,
+        type: organization.type,
+        result: "deleted",
+      },
+    });
+
+    return NextResponse.json({
+      success: true,
+      deleted: {
+        id: organization.id,
+        name: organization.name,
+      },
+    });
+  } catch (error) {
+    console.error("Delete organization error:", error);
+    return NextResponse.json(
+      { error: "Failed to delete organization" },
+      { status: 500 },
+    );
+  }
+}

@@ -32,6 +32,7 @@ vi.mock("@/lib/audit", () => ({
   AUDIT_ACTIONS: {
     ORGANIZATION_CREATED: "ORGANIZATION_CREATED",
     ORGANIZATION_UPDATED: "ORGANIZATION_UPDATED",
+    ORGANIZATION_DELETED: "ORGANIZATION_DELETED",
   },
 }));
 
@@ -42,6 +43,7 @@ const orgFindUniqueOrThrow =
   vi.fn<(args?: unknown) => Promise<unknown>>();
 const orgCreate = vi.fn<(args?: unknown) => Promise<unknown>>();
 const orgUpdate = vi.fn<(args?: unknown) => Promise<unknown>>();
+const orgDelete = vi.fn<(args?: unknown) => Promise<unknown>>();
 const orgCountryDeleteMany =
   vi.fn<(args?: unknown) => Promise<unknown>>();
 const orgCountryCreateMany =
@@ -57,6 +59,7 @@ vi.mock("@/lib/prisma", () => {
       findUniqueOrThrow: (a: unknown) => orgFindUniqueOrThrow(a),
       create: (a: unknown) => orgCreate(a),
       update: (a: unknown) => orgUpdate(a),
+      delete: (a: unknown) => orgDelete(a),
     },
     organizationCountry: {
       deleteMany: (a: unknown) => orgCountryDeleteMany(a),
@@ -77,6 +80,7 @@ import {
 import {
   GET as itemGetRaw,
   PUT as itemPutRaw,
+  DELETE as itemDeleteRaw,
 } from "@/app/api/organizations/[id]/route";
 
 type AnyHandler = (
@@ -88,6 +92,7 @@ const listGet = listGetRaw as unknown as AnyHandler;
 const listPost = listPostRaw as unknown as AnyHandler;
 const itemGet = itemGetRaw as unknown as AnyHandler;
 const itemPut = itemPutRaw as unknown as AnyHandler;
+const itemDelete = itemDeleteRaw as unknown as AnyHandler;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -701,5 +706,126 @@ describe("GET /api/organizations/[id]", () => {
     };
     expect(body.organization.countryScope).toBe("ALL");
     expect(body.organization.countryIds).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DELETE /api/organizations/[id]
+// ---------------------------------------------------------------------------
+describe("DELETE /api/organizations/[id]", () => {
+  const ctx = { params: Promise.resolve({ id: "org-x" }) };
+
+  it("returns 401 for anonymous callers", async () => {
+    mockAnonymous();
+    const res = await itemDelete(
+      makeReq("http://x/api/organizations/org-x", { method: "DELETE" }),
+      ctx,
+    );
+    expect(res.status).toBe(401);
+    expect(orgDelete).not.toHaveBeenCalled();
+  });
+
+  it("returns 403 for PARTNER_ADMIN (delete is SYSTEM_OWNER-only)", async () => {
+    mockPartnerAdmin("org-x");
+    const res = await itemDelete(
+      makeReq("http://x/api/organizations/org-x", { method: "DELETE" }),
+      ctx,
+    );
+    expect(res.status).toBe(403);
+    expect(orgDelete).not.toHaveBeenCalled();
+  });
+
+  it("returns 404 when the organization does not exist", async () => {
+    mockSystemOwner();
+    orgFindUnique.mockResolvedValue(null);
+    const res = await itemDelete(
+      makeReq("http://x/api/organizations/org-x", { method: "DELETE" }),
+      ctx,
+    );
+    expect(res.status).toBe(404);
+    expect(orgDelete).not.toHaveBeenCalled();
+  });
+
+  it("blocks deletion with 409 when projects are linked and surfaces counts", async () => {
+    mockSystemOwner();
+    orgFindUnique.mockResolvedValue({
+      id: "org-x",
+      name: "Busy Org",
+      type: "INGO",
+      _count: { projects: 3, users: 0 },
+    });
+    const res = await itemDelete(
+      makeReq("http://x/api/organizations/org-x", { method: "DELETE" }),
+      ctx,
+    );
+    expect(res.status).toBe(409);
+    const body = (await res.json()) as {
+      error: string;
+      details: { projects: number; users: number };
+    };
+    expect(body.error).toMatch(/3 linked project/i);
+    expect(body.details).toEqual({ projects: 3, users: 0 });
+    expect(orgDelete).not.toHaveBeenCalled();
+    // Blocked events are audited too, with result=blocked.
+    expect(mockLogAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "ORGANIZATION_DELETED",
+        payload: expect.objectContaining({ result: "blocked", projects: 3 }),
+      }),
+    );
+  });
+
+  it("blocks deletion when users are attached even if no projects", async () => {
+    mockSystemOwner();
+    orgFindUnique.mockResolvedValue({
+      id: "org-x",
+      name: "Has Users Org",
+      type: "LNGO",
+      _count: { projects: 0, users: 2 },
+    });
+    const res = await itemDelete(
+      makeReq("http://x/api/organizations/org-x", { method: "DELETE" }),
+      ctx,
+    );
+    expect(res.status).toBe(409);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toMatch(/2 assigned user/i);
+    expect(orgDelete).not.toHaveBeenCalled();
+  });
+
+  it("hard-deletes an unreferenced organization and audits result=deleted", async () => {
+    mockSystemOwner();
+    orgFindUnique.mockResolvedValue({
+      id: "org-x",
+      name: "Empty Org",
+      type: "LNGO",
+      _count: { projects: 0, users: 0 },
+    });
+    orgCountryDeleteMany.mockResolvedValue({ count: 0 });
+    orgDelete.mockResolvedValue({ id: "org-x" });
+
+    const res = await itemDelete(
+      makeReq("http://x/api/organizations/org-x", { method: "DELETE" }),
+      ctx,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      success: boolean;
+      deleted: { id: string; name: string };
+    };
+    expect(body.success).toBe(true);
+    expect(body.deleted).toEqual({ id: "org-x", name: "Empty Org" });
+
+    // Join rows cleaned up first, then the org row deleted.
+    expect(orgCountryDeleteMany).toHaveBeenCalledWith({
+      where: { organizationId: "org-x" },
+    });
+    expect(orgDelete).toHaveBeenCalledWith({ where: { id: "org-x" } });
+    expect(mockLogAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "ORGANIZATION_DELETED",
+        payload: expect.objectContaining({ result: "deleted" }),
+      }),
+    );
   });
 });

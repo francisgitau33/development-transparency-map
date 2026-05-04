@@ -12,13 +12,13 @@ import { PUBLIC_NAV } from "@/lib/branding";
  * - Right side: Partner Access
  *
  * Route-aware left-side behaviour:
- * - On `/about` and `/map`, the left side is replaced with a single
- *   "← Back to Home" link that routes to `/`. The About page previously
- *   rendered a self-referencing "About" link, and the Map page had no way
- *   back to Home from the top bar. Both now expose an explicit,
- *   keyboard-accessible link.
- * - On the homepage and Partner Access (`/login`), the default About link
- *   is preserved so public visitors can still reach the About page.
+ * - On `/about`, `/team`, and `/map`, the left side is replaced with a
+ *   single "← Back to Home" link that routes to `/`. Those pages would
+ *   otherwise either (a) render a self-referencing left-nav item or
+ *   (b) leave the user without an obvious way back to the homepage.
+ * - On the homepage and Partner Access (`/login`), the default left-nav
+ *   items ("About", "Our Team") are preserved so visitors can still
+ *   reach those pages.
  *
  * DO NOT ADD:
  * - Explore Map (it goes on homepage hero as CTA)
@@ -30,9 +30,12 @@ import { PUBLIC_NAV } from "@/lib/branding";
 export function PublicHeader() {
   const pathname = usePathname();
   // Back-to-Home is only useful on pages that are themselves NOT the home
-  // page. We intentionally scope this to the About and Explore Map pages
-  // per the current UX spec.
-  const showBackToHome = pathname === "/about" || pathname === "/map";
+  // page. We intentionally scope this to the About, Our Team, and Explore
+  // Map pages per the current UX spec.
+  const showBackToHome =
+    pathname === "/about" ||
+    pathname === "/team" ||
+    pathname === "/map";
 
   return (
     <header

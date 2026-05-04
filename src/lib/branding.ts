@@ -16,6 +16,7 @@ export const BRANDING = {
 export const PUBLIC_NAV = {
   left: [
     { label: "About", href: "/about" },
+    { label: "Our Team", href: "/team" },
   ],
   right: [
     { label: "Partner Access", href: "/login" },

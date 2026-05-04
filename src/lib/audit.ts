@@ -11,6 +11,11 @@ export const AUDIT_ACTIONS = {
   ROLE_ASSIGNED: "ROLE_ASSIGNED",
   ORGANIZATION_CREATED: "ORGANIZATION_CREATED",
   ORGANIZATION_UPDATED: "ORGANIZATION_UPDATED",
+  // Hard delete of an Organization by SYSTEM_OWNER. Blocked by the API
+  // when the organisation has linked projects or users; the UI is
+  // expected to surface the blocking reason. Payload captures the
+  // organisation name + type for post-hoc review.
+  ORGANIZATION_DELETED: "ORGANIZATION_DELETED",
   PROJECT_CREATED: "PROJECT_CREATED",
   PROJECT_UPDATED: "PROJECT_UPDATED",
   PROJECT_DELETED: "PROJECT_DELETED",
@@ -25,6 +30,11 @@ export const AUDIT_ACTIONS = {
   REFERENCE_DELETED: "REFERENCE_DELETED",
   REFERENCE_DELETE_BLOCKED: "REFERENCE_DELETE_BLOCKED",
   SYSTEM_OWNER_SEED_VERIFIED: "SYSTEM_OWNER_SEED_VERIFIED",
+  // Team-member CMS (SYSTEM_OWNER-only). Each event carries the
+  // member's name + role at time of mutation, for post-hoc review.
+  TEAM_MEMBER_CREATED: "TEAM_MEMBER_CREATED",
+  TEAM_MEMBER_UPDATED: "TEAM_MEMBER_UPDATED",
+  TEAM_MEMBER_DELETED: "TEAM_MEMBER_DELETED",
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

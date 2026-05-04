@@ -99,6 +99,11 @@ export default function MapPage() {
   const [orgTypeFilter, setOrgTypeFilter] = useState<string>("_all");
   const [districtFilter, setDistrictFilter] = useState<string>("_all");
   const [donorFilter, setDonorFilter] = useState<string>("_all");
+  // Organization filter — lets an organisation (or anyone) isolate the
+  // markers owned by a single implementing organisation across all
+  // countries / districts / sectors / donors. Derived from the projects
+  // already loaded (so we don't broaden the public API surface).
+  const [organizationFilter, setOrganizationFilter] = useState<string>("_all");
 
   const fetchData = async () => {
     setLoading(true);
@@ -157,6 +162,12 @@ export default function MapPage() {
       if (donorFilter !== "_all" && project.donorId !== donorFilter) {
         return false;
       }
+      if (
+        organizationFilter !== "_all" &&
+        project.organization.id !== organizationFilter
+      ) {
+        return false;
+      }
       return true;
     });
   }, [
@@ -167,6 +178,7 @@ export default function MapPage() {
     orgTypeFilter,
     districtFilter,
     donorFilter,
+    organizationFilter,
   ]);
 
   // Reset district when country changes (scoping is country-specific).
@@ -186,6 +198,7 @@ export default function MapPage() {
     setOrgTypeFilter("_all");
     setDistrictFilter("_all");
     setDonorFilter("_all");
+    setOrganizationFilter("_all");
   };
 
   const hasFilters =
@@ -194,7 +207,25 @@ export default function MapPage() {
     statusFilter !== "_all" ||
     orgTypeFilter !== "_all" ||
     districtFilter !== "_all" ||
-    donorFilter !== "_all";
+    donorFilter !== "_all" ||
+    organizationFilter !== "_all";
+
+  // Unique organization options, derived from the loaded projects. Using
+  // the project set (rather than a separate /api/organizations call) keeps
+  // the list tightly scoped to organisations that actually have visible
+  // projects on the map, and avoids introducing a new public endpoint.
+  const organizationOptions = useMemo(() => {
+    const seen = new Map<string, { id: string; name: string }>();
+    for (const p of projects) {
+      const org = p.organization;
+      if (org?.id && !seen.has(org.id)) {
+        seen.set(org.id, { id: org.id, name: org.name });
+      }
+    }
+    return Array.from(seen.values()).sort((a, b) =>
+      a.name.localeCompare(b.name),
+    );
+  }, [projects]);
 
   const [legendExpanded, setLegendExpanded] = useState(true);
 
@@ -338,6 +369,27 @@ export default function MapPage() {
                 {donors.map((d) => (
                   <SelectItem key={d.id} value={d.id}>
                     {d.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={organizationFilter}
+              onValueChange={setOrganizationFilter}
+            >
+              <SelectTrigger
+                data-design-id="map-filter-organization"
+                className="h-8 w-[180px] text-sm"
+                title="Filter markers by implementing organisation."
+              >
+                <SelectValue placeholder="All Organizations" />
+              </SelectTrigger>
+              <SelectContent className="z-[1100]">
+                <SelectItem value="_all">All Organizations</SelectItem>
+                {organizationOptions.map((o) => (
+                  <SelectItem key={o.id} value={o.id}>
+                    {o.name}
                   </SelectItem>
                 ))}
               </SelectContent>

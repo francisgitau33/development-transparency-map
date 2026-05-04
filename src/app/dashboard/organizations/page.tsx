@@ -30,6 +30,7 @@ import {
   Users,
   Pencil,
   Globe,
+  Trash2,
 } from "lucide-react";
 
 interface Organization {
@@ -94,6 +95,11 @@ export default function OrganizationsPage() {
   const [saving, setSaving] = useState(false);
 
   const [formData, setFormData] = useState<FormState>(EMPTY_FORM);
+
+  // Delete confirmation state. Separate from the edit dialog so closing
+  // one does not affect the other.
+  const [deleteOrg, setDeleteOrg] = useState<Organization | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -213,6 +219,40 @@ export default function OrganizationsPage() {
       );
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteOrg) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/organizations/${deleteOrg.id}`, {
+        method: "DELETE",
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        // The API returns 409 with a helpful message when linked
+        // projects / users block the delete. Surface it verbatim.
+        throw new Error(
+          data.error ||
+            "Failed to delete organization. Please try again.",
+        );
+      }
+
+      toast.success(
+        `Organization "${deleteOrg.name}" deleted successfully`,
+      );
+      setDeleteOrg(null);
+      await fetchData();
+    } catch (err) {
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : "Failed to delete organization",
+      );
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -411,14 +451,27 @@ export default function OrganizationsPage() {
                     </TableCell>
                     {isSystemOwner && (
                       <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => openDialog(org)}
-                          data-design-id={`org-edit-${org.id}`}
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </Button>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openDialog(org)}
+                            data-design-id={`org-edit-${org.id}`}
+                            aria-label={`Edit ${org.name}`}
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setDeleteOrg(org)}
+                            data-design-id={`org-delete-${org.id}`}
+                            aria-label={`Delete ${org.name}`}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     )}
                   </TableRow>
@@ -591,6 +644,85 @@ export default function OrganizationsPage() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/*
+        Delete confirmation dialog. Mirrors the reference-data delete
+        UX: explicit confirmation required, shows dependency counts so
+        the SYSTEM_OWNER can't accidentally destroy a populated org,
+        and the primary action is styled destructively.
+      */}
+      <Dialog
+        open={deleteOrg !== null}
+        onOpenChange={(open) => {
+          if (!open && !deleting) setDeleteOrg(null);
+        }}
+      >
+        <DialogContent
+          className="max-w-md"
+          data-design-id="organization-delete-dialog"
+        >
+          <DialogHeader>
+            <DialogTitle>Delete organization?</DialogTitle>
+            <DialogDescription>
+              This permanently removes{" "}
+              <span className="font-medium text-slate-900">
+                {deleteOrg?.name}
+              </span>
+              {" "}from the platform. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+
+          {deleteOrg &&
+            (deleteOrg._count.projects > 0 || deleteOrg._count.users > 0) && (
+              <div
+                data-design-id="organization-delete-warning"
+                className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+              >
+                <p className="font-medium mb-1">
+                  This organization has linked records
+                </p>
+                <ul className="list-disc pl-5 space-y-0.5">
+                  {deleteOrg._count.projects > 0 && (
+                    <li>
+                      {deleteOrg._count.projects} linked project
+                      {deleteOrg._count.projects === 1 ? "" : "s"}
+                    </li>
+                  )}
+                  {deleteOrg._count.users > 0 && (
+                    <li>
+                      {deleteOrg._count.users} assigned user
+                      {deleteOrg._count.users === 1 ? "" : "s"}
+                    </li>
+                  )}
+                </ul>
+                <p className="mt-2">
+                  Delete or reassign these before deleting the organization.
+                  The server will refuse the delete otherwise.
+                </p>
+              </div>
+            )}
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setDeleteOrg(null)}
+              disabled={deleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleDelete}
+              disabled={deleting}
+              data-design-id="organization-delete-confirm"
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              {deleting ? "Deleting..." : "Delete Organization"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
