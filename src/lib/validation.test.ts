@@ -14,6 +14,7 @@ import {
   TEAM_MEMBER_BIO_MAX_LENGTH,
   TEAM_MEMBER_NAME_MAX_LENGTH,
   TEAM_MEMBER_ROLE_MAX_LENGTH,
+  TEAM_MEMBER_PHOTO_MAX_BYTES,
   TEAM_MEMBER_URL_MAX_LENGTH,
   parseOptionalPopulation,
   parseOptionalPopulationYear,
@@ -21,6 +22,7 @@ import {
   validateOrganization,
   validateProject,
   validateTeamMember,
+  validateTeamMemberPhoto,
 } from "./validation";
 
 describe("parseOptionalPopulation", () => {
@@ -454,5 +456,82 @@ describe("validateTeamMember", () => {
       photoUrl: "https://example.com/a.jpg",
       linkedinUrl: "https://www.linkedin.com/in/ada",
     });
+  });
+});
+
+describe("validateTeamMemberPhoto", () => {
+  const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
+  const PNG = Buffer.from([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x01, 0x02,
+  ]);
+  const b64 = (buf: Buffer) => buf.toString("base64");
+
+  it("accepts a valid JPEG payload", () => {
+    const r = validateTeamMemberPhoto(b64(JPEG), "image/jpeg");
+    expect(r.valid).toBe(true);
+    expect(r.mimeType).toBe("image/jpeg");
+    expect(r.data?.length).toBe(JPEG.length);
+  });
+
+  it("accepts a valid PNG payload", () => {
+    const r = validateTeamMemberPhoto(b64(PNG), "image/png");
+    expect(r.valid).toBe(true);
+    expect(r.mimeType).toBe("image/png");
+  });
+
+  it("accepts a data-URL prefixed base64 payload", () => {
+    const r = validateTeamMemberPhoto(
+      `data:image/png;base64,${b64(PNG)}`,
+      "image/png",
+    );
+    expect(r.valid).toBe(true);
+  });
+
+  it("rejects missing base64 data", () => {
+    expect(validateTeamMemberPhoto("", "image/jpeg").valid).toBe(false);
+    expect(validateTeamMemberPhoto(undefined, "image/jpeg").valid).toBe(false);
+    expect(validateTeamMemberPhoto(null, "image/jpeg").valid).toBe(false);
+  });
+
+  it("rejects unsupported MIME types", () => {
+    const r = validateTeamMemberPhoto(b64(PNG), "image/svg+xml");
+    expect(r.valid).toBe(false);
+    expect(r.error).toMatch(/JPEG or PNG/i);
+  });
+
+  it("rejects executable / script MIME types", () => {
+    expect(
+      validateTeamMemberPhoto(b64(PNG), "text/html").valid,
+    ).toBe(false);
+    expect(
+      validateTeamMemberPhoto(b64(PNG), "application/javascript").valid,
+    ).toBe(false);
+  });
+
+  it("rejects mismatched MIME vs magic bytes", () => {
+    // JPEG bytes with PNG MIME
+    expect(validateTeamMemberPhoto(b64(JPEG), "image/png").valid).toBe(false);
+    // PNG bytes with JPEG MIME
+    expect(validateTeamMemberPhoto(b64(PNG), "image/jpeg").valid).toBe(false);
+  });
+
+  it("rejects non-base64 gibberish", () => {
+    const r = validateTeamMemberPhoto("!!!not base64!!!", "image/jpeg");
+    expect(r.valid).toBe(false);
+  });
+
+  it("rejects payloads exceeding the max size", () => {
+    const huge = Buffer.alloc(TEAM_MEMBER_PHOTO_MAX_BYTES + 1, 0xff);
+    huge[0] = 0xff;
+    huge[1] = 0xd8;
+    huge[2] = 0xff;
+    const r = validateTeamMemberPhoto(b64(huge), "image/jpeg");
+    expect(r.valid).toBe(false);
+    expect(r.error).toMatch(/too large/i);
+  });
+
+  it("rejects an empty payload after decoding", () => {
+    const r = validateTeamMemberPhoto(b64(Buffer.alloc(0)), "image/jpeg");
+    expect(r.valid).toBe(false);
   });
 });

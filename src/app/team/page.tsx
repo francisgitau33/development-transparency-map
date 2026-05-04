@@ -11,10 +11,16 @@ interface TeamMember {
   name: string;
   role: string;
   bio: string | null;
+  /** Legacy external-URL fallback (pre-upload feature rows). */
   photoUrl: string | null;
+  /** True when /api/team/[id]/photo will return uploaded bytes. */
+  hasPhoto: boolean;
+  photoMimeType: string | null;
   linkedinUrl: string | null;
   displayOrder: number;
   active: boolean;
+  /** Cache-buster for the photo endpoint — changes on every save. */
+  updatedAt: string;
 }
 
 /**
@@ -127,11 +133,24 @@ export default function TeamPage() {
                       data-design-id={`team-member-photo-${m.id}`}
                       className="bg-slate-100 flex items-center justify-center aspect-square md:aspect-auto md:h-full"
                     >
-                      {m.photoUrl ? (
-                        // Next.js Image is configured with
-                        // `unoptimized: true` (see next.config.js), so a
-                        // plain <img> works for any external URL without
-                        // a remote-patterns entry.
+                      {m.hasPhoto ? (
+                        // Preferred path: uploaded JPEG/PNG served from
+                        // the dedicated photo endpoint. Next.js Image is
+                        // configured with `unoptimized: true`, so a
+                        // plain <img> works without remote-patterns.
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={`/api/team/${m.id}/photo?v=${encodeURIComponent(m.updatedAt ?? "")}`}
+                          alt={m.name}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                        />
+                      ) : m.photoUrl ? (
+                        // Backward-compat: legacy rows whose photo is an
+                        // external URL. These still render cleanly; if
+                        // the remote host is gone we hide the <img> so
+                        // the background slot stays clean (placeholder
+                        // will become visible on the next mount).
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
                           src={m.photoUrl}
@@ -139,9 +158,6 @@ export default function TeamPage() {
                           className="w-full h-full object-cover"
                           loading="lazy"
                           onError={(e) => {
-                            // Gracefully degrade if the URL breaks — hide
-                            // the broken image so the placeholder below
-                            // is seen instead.
                             (e.currentTarget as HTMLImageElement).style.display =
                               "none";
                           }}

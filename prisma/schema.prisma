@@ -404,7 +404,17 @@ model TeamMember {
   name         String
   role         String
   bio          String?
+  // Legacy external URL slot. Kept for backward compatibility with rows
+  // that were created before the in-app photo-upload feature landed.
+  // New CMS writes leave this null and populate photoData instead.
   photoUrl     String?
+  // Uploaded-photo bytes stored in-database. Populated by the CMS photo
+  // upload (JPEG / PNG only, size-capped, MIME sniffed on the server).
+  // Served to the public /team page via GET /api/team/[id]/photo — the
+  // raw bytes are NEVER returned by /api/team list/item endpoints so
+  // large blobs don't bloat JSON responses.
+  photoData     Bytes?
+  photoMimeType String?
   linkedinUrl  String?
   displayOrder Int      @default(0)
   active       Boolean  @default(true)

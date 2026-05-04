@@ -532,6 +532,116 @@ export const TEAM_MEMBER_ROLE_MAX_LENGTH = 160;
 export const TEAM_MEMBER_BIO_MAX_LENGTH = 4000;
 export const TEAM_MEMBER_URL_MAX_LENGTH = 2048;
 
+// Max decoded (raw) bytes for an uploaded team-member photo. Chosen to
+// comfortably accommodate a high-quality portrait JPEG while keeping
+// the resulting base64 payload (~33 % larger) small enough that the
+// JSON request body stays under typical proxy limits (~3 MB). Enforced
+// SERVER-SIDE — the client's reported file.size is not trusted.
+export const TEAM_MEMBER_PHOTO_MAX_BYTES = 2 * 1024 * 1024; // 2 MB
+export const TEAM_MEMBER_PHOTO_MIME_TYPES = ["image/jpeg", "image/png"] as const;
+export type TeamMemberPhotoMimeType =
+  (typeof TEAM_MEMBER_PHOTO_MIME_TYPES)[number];
+
+interface TeamMemberPhotoValidation {
+  valid: boolean;
+  error: string | null;
+  data: Buffer | null;
+  mimeType: TeamMemberPhotoMimeType | null;
+}
+
+/**
+ * Validate an uploaded team-member photo payload.
+ *
+ * Callers pass:
+ *   - `base64` — the raw base64 payload (NOT a data-URL). The CMS
+ *     strips any leading `data:*;base64,` prefix before sending.
+ *   - `mimeType` — the client-declared MIME type.
+ *
+ * The validator:
+ *   1. Rejects anything other than `image/jpeg` or `image/png`.
+ *   2. Decodes the base64 and enforces `TEAM_MEMBER_PHOTO_MAX_BYTES`.
+ *   3. Sniffs the leading magic bytes to confirm the bytes actually
+ *      match the claimed MIME type — so a renamed `evil.svg` or
+ *      `evil.html` can't slip through.
+ *
+ * Returns a decoded `Buffer` ready to be persisted, plus the confirmed
+ * MIME string.
+ */
+export function validateTeamMemberPhoto(
+  base64: unknown,
+  mimeType: unknown,
+): TeamMemberPhotoValidation {
+  const invalid = (error: string): TeamMemberPhotoValidation => ({
+    valid: false,
+    error,
+    data: null,
+    mimeType: null,
+  });
+
+  if (typeof base64 !== "string" || base64.trim().length === 0) {
+    return invalid("Photo data is required");
+  }
+  if (typeof mimeType !== "string") {
+    return invalid("Photo MIME type is required");
+  }
+  const mime = mimeType.trim().toLowerCase();
+  if (!TEAM_MEMBER_PHOTO_MIME_TYPES.includes(mime as TeamMemberPhotoMimeType)) {
+    return invalid("Photo must be a JPEG or PNG image");
+  }
+
+  // Strip an optional data-URL prefix so the CMS can send either shape.
+  const payload = base64.replace(/^data:[^;]+;base64,/, "").trim();
+  // Base64-only characters. Reject early to avoid decode surprises.
+  if (!/^[A-Za-z0-9+/=\s]+$/.test(payload)) {
+    return invalid("Photo upload payload is not valid base64");
+  }
+
+  let buffer: Buffer;
+  try {
+    buffer = Buffer.from(payload, "base64");
+  } catch {
+    return invalid("Photo upload payload is not valid base64");
+  }
+  if (buffer.length === 0) {
+    return invalid("Photo upload payload is empty");
+  }
+  if (buffer.length > TEAM_MEMBER_PHOTO_MAX_BYTES) {
+    const maxMb = Math.round(TEAM_MEMBER_PHOTO_MAX_BYTES / (1024 * 1024));
+    return invalid(`Photo is too large (max ${maxMb} MB)`);
+  }
+
+  // Magic-byte sniffing. Both signatures are short and fixed.
+  const isJpeg =
+    buffer.length >= 3 &&
+    buffer[0] === 0xff &&
+    buffer[1] === 0xd8 &&
+    buffer[2] === 0xff;
+  const isPng =
+    buffer.length >= 8 &&
+    buffer[0] === 0x89 &&
+    buffer[1] === 0x50 &&
+    buffer[2] === 0x4e &&
+    buffer[3] === 0x47 &&
+    buffer[4] === 0x0d &&
+    buffer[5] === 0x0a &&
+    buffer[6] === 0x1a &&
+    buffer[7] === 0x0a;
+
+  if (mime === "image/jpeg" && !isJpeg) {
+    return invalid("Uploaded file is not a valid JPEG image");
+  }
+  if (mime === "image/png" && !isPng) {
+    return invalid("Uploaded file is not a valid PNG image");
+  }
+
+  return {
+    valid: true,
+    error: null,
+    data: buffer,
+    mimeType: mime as TeamMemberPhotoMimeType,
+  };
+}
+
 function normalizeHttpUrlOrNull(
   value: unknown,
   fieldLabel: string,

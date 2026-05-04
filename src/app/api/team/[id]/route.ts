@@ -2,14 +2,26 @@ import { type NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { AUDIT_ACTIONS, logAudit } from "@/lib/audit";
-import { validateTeamMember } from "@/lib/validation";
+import {
+  validateTeamMember,
+  validateTeamMemberPhoto,
+} from "@/lib/validation";
 
 /**
  * /api/team/[id]
  *
  *   PUT     — SYSTEM_OWNER only. Replaces the mutable fields of a
  *             single team member. Uses the same validator as POST so
- *             the normalization rules stay in one place.
+ *             the normalization rules stay in one place. Photo upload
+ *             is OPTIONAL on update:
+ *               - If `photoBase64` is present and non-empty, the bytes
+ *                 are validated and replace the existing photo.
+ *               - If `photoBase64` is absent / null / empty, the
+ *                 previously-stored photoData + photoMimeType are
+ *                 preserved untouched.
+ *             This matches the UX brief: "Preserve the existing image
+ *             when editing if the user does not upload a replacement."
+ *
  *   DELETE  — SYSTEM_OWNER only. Hard-deletes the row. TeamMember has
  *             no dependants so there is no guard to clear.
  *
@@ -24,6 +36,7 @@ interface SerializableTeamMember {
   role: string;
   bio: string | null;
   photoUrl: string | null;
+  photoMimeType: string | null;
   linkedinUrl: string | null;
   displayOrder: number;
   active: boolean;
@@ -31,13 +44,17 @@ interface SerializableTeamMember {
   updatedAt: Date;
 }
 
-function serializeTeamMember(m: SerializableTeamMember) {
+function serializeTeamMember(
+  m: SerializableTeamMember & { photoData?: Buffer | Uint8Array | null },
+) {
   return {
     id: m.id,
     name: m.name,
     role: m.role,
     bio: m.bio,
     photoUrl: m.photoUrl,
+    hasPhoto: Boolean(m.photoData) && Boolean(m.photoMimeType),
+    photoMimeType: m.photoMimeType,
     linkedinUrl: m.linkedinUrl,
     displayOrder: m.displayOrder,
     active: m.active,
@@ -87,6 +104,32 @@ export async function PUT(
       );
     }
 
+    // Optional photo replacement. We distinguish between "field absent"
+    // (keep existing photo) and "field provided with bad data" (400).
+    const photoField = (body as { photoBase64?: unknown }).photoBase64;
+    const photoReplacementProvided =
+      typeof photoField === "string" && photoField.trim().length > 0;
+
+    let photoBytes: Buffer | null = null;
+    let photoMimeType: string | null = null;
+    if (photoReplacementProvided) {
+      const photo = validateTeamMemberPhoto(
+        photoField,
+        (body as { photoMimeType?: unknown }).photoMimeType,
+      );
+      if (!photo.valid || !photo.data || !photo.mimeType) {
+        return NextResponse.json(
+          {
+            error: "Validation failed",
+            details: [photo.error ?? "Photo upload failed validation"],
+          },
+          { status: 400 },
+        );
+      }
+      photoBytes = photo.data;
+      photoMimeType = photo.mimeType;
+    }
+
     const data = validation.normalizedData as {
       name: string;
       role: string;
@@ -107,6 +150,11 @@ export async function PUT(
         linkedinUrl: data.linkedinUrl,
         displayOrder: data.displayOrder,
         active: data.active,
+        // Only overwrite the photo columns when a replacement was
+        // actually supplied. Otherwise Prisma leaves them untouched.
+        ...(photoReplacementProvided
+          ? { photoData: photoBytes, photoMimeType }
+          : {}),
       },
     });
 
@@ -120,6 +168,10 @@ export async function PUT(
         name: member.name,
         role: member.role,
         active: member.active,
+        photoReplaced: photoReplacementProvided,
+        ...(photoReplacementProvided
+          ? { photoBytes: photoBytes?.length ?? 0, photoMimeType }
+          : {}),
       },
     });
 
@@ -134,7 +186,7 @@ export async function PUT(
 }
 
 export async function DELETE(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {

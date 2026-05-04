@@ -107,6 +107,8 @@ const ACTIVE_MEMBER = {
   role: "Advisor",
   bio: null,
   photoUrl: null,
+  photoData: null,
+  photoMimeType: null,
   linkedinUrl: null,
   displayOrder: 0,
   active: true,
@@ -114,6 +116,16 @@ const ACTIVE_MEMBER = {
   updatedAt: new Date(),
 };
 const INACTIVE_MEMBER = { ...ACTIVE_MEMBER, id: "tm-2", name: "Grace", active: false };
+
+// Tiny real-looking PNG / JPEG payloads used by POST/PUT tests. These
+// only need to pass the server's magic-byte sniffer; they are never
+// decoded as images.
+const JPEG_BYTES = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
+const JPEG_B64 = JPEG_BYTES.toString("base64");
+const PNG_BYTES = Buffer.from([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00,
+]);
+const PNG_B64 = PNG_BYTES.toString("base64");
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -173,7 +185,12 @@ describe("POST /api/team", () => {
     const res = await listPost(
       makeReq("http://x/api/team", {
         method: "POST",
-        body: { name: "Ada", role: "Advisor" },
+        body: {
+          name: "Ada",
+          role: "Advisor",
+          photoBase64: JPEG_B64,
+          photoMimeType: "image/jpeg",
+        },
       }),
     );
     expect(res.status).toBe(403);
@@ -185,7 +202,12 @@ describe("POST /api/team", () => {
     const res = await listPost(
       makeReq("http://x/api/team", {
         method: "POST",
-        body: { name: "", role: "" },
+        body: {
+          name: "",
+          role: "",
+          photoBase64: JPEG_B64,
+          photoMimeType: "image/jpeg",
+        },
       }),
     );
     expect(res.status).toBe(400);
@@ -201,6 +223,8 @@ describe("POST /api/team", () => {
           name: "Ada",
           role: "Advisor",
           photoUrl: "javascript:alert(1)",
+          photoBase64: JPEG_B64,
+          photoMimeType: "image/jpeg",
         },
       }),
     );
@@ -208,13 +232,62 @@ describe("POST /api/team", () => {
     expect(teamCreate).not.toHaveBeenCalled();
   });
 
-  it("creates a valid row and audits TEAM_MEMBER_CREATED", async () => {
+  it("rejects POST when photo is missing (photo required on create)", async () => {
+    mockSystemOwner();
+    const res = await listPost(
+      makeReq("http://x/api/team", {
+        method: "POST",
+        body: { name: "Ada", role: "Advisor" },
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(teamCreate).not.toHaveBeenCalled();
+  });
+
+  it("rejects POST when photo MIME is not JPEG/PNG", async () => {
+    mockSystemOwner();
+    const res = await listPost(
+      makeReq("http://x/api/team", {
+        method: "POST",
+        body: {
+          name: "Ada",
+          role: "Advisor",
+          photoBase64: JPEG_B64,
+          photoMimeType: "image/svg+xml",
+        },
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(teamCreate).not.toHaveBeenCalled();
+  });
+
+  it("rejects POST when bytes don't match the claimed MIME", async () => {
+    mockSystemOwner();
+    // Claim PNG but send JPEG bytes — magic-byte sniff rejects.
+    const res = await listPost(
+      makeReq("http://x/api/team", {
+        method: "POST",
+        body: {
+          name: "Ada",
+          role: "Advisor",
+          photoBase64: JPEG_B64,
+          photoMimeType: "image/png",
+        },
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(teamCreate).not.toHaveBeenCalled();
+  });
+
+  it("creates a valid row with uploaded JPEG and audits TEAM_MEMBER_CREATED", async () => {
     mockSystemOwner();
     teamCreate.mockResolvedValue({
       ...ACTIVE_MEMBER,
       id: "tm-new",
       name: "Ada",
       role: "Advisor",
+      photoMimeType: "image/jpeg",
+      photoData: JPEG_BYTES,
     });
     const res = await listPost(
       makeReq("http://x/api/team", {
@@ -222,7 +295,8 @@ describe("POST /api/team", () => {
         body: {
           name: "Ada",
           role: "Advisor",
-          photoUrl: "https://example.com/a.jpg",
+          photoBase64: JPEG_B64,
+          photoMimeType: "image/jpeg",
           displayOrder: 3,
           active: true,
         },
@@ -234,15 +308,43 @@ describe("POST /api/team", () => {
         data: expect.objectContaining({
           name: "Ada",
           role: "Advisor",
-          photoUrl: "https://example.com/a.jpg",
+          photoMimeType: "image/jpeg",
           displayOrder: 3,
           active: true,
         }),
       }),
     );
+    // Response exposes hasPhoto but never raw bytes.
+    const body = (await res.json()) as {
+      member: { hasPhoto: boolean; photoData?: unknown };
+    };
+    expect(body.member.hasPhoto).toBe(true);
+    expect(body.member.photoData).toBeUndefined();
     expect(mockLogAudit).toHaveBeenCalledWith(
       expect.objectContaining({ action: "TEAM_MEMBER_CREATED" }),
     );
+  });
+
+  it("accepts PNG bytes with image/png MIME", async () => {
+    mockSystemOwner();
+    teamCreate.mockResolvedValue({
+      ...ACTIVE_MEMBER,
+      id: "tm-new",
+      photoMimeType: "image/png",
+      photoData: PNG_BYTES,
+    });
+    const res = await listPost(
+      makeReq("http://x/api/team", {
+        method: "POST",
+        body: {
+          name: "Ada",
+          role: "Advisor",
+          photoBase64: PNG_B64,
+          photoMimeType: "image/png",
+        },
+      }),
+    );
+    expect(res.status).toBe(201);
   });
 });
 
@@ -344,5 +446,78 @@ describe("PUT /api/team/[id]", () => {
         data: expect.objectContaining({ active: false }),
       }),
     );
+  });
+
+  it("preserves existing photo when PUT body omits photoBase64", async () => {
+    mockSystemOwner();
+    teamFindUnique.mockResolvedValue({
+      ...ACTIVE_MEMBER,
+      photoData: JPEG_BYTES,
+      photoMimeType: "image/jpeg",
+    });
+    teamUpdate.mockResolvedValue({ ...ACTIVE_MEMBER, name: "Ada Lovelace" });
+    const res = await itemPut(
+      makeReq("http://x/api/team/tm-1", {
+        method: "PUT",
+        body: { name: "Ada Lovelace", role: "Advisor" },
+      }),
+      ctx,
+    );
+    expect(res.status).toBe(200);
+    const updateArgs = teamUpdate.mock.calls[0]?.[0] as {
+      data: Record<string, unknown>;
+    };
+    // Neither photoData nor photoMimeType is passed through when the
+    // request did not include a replacement.
+    expect(updateArgs.data).not.toHaveProperty("photoData");
+    expect(updateArgs.data).not.toHaveProperty("photoMimeType");
+  });
+
+  it("replaces photo when PUT body includes valid photoBase64", async () => {
+    mockSystemOwner();
+    teamFindUnique.mockResolvedValue({ ...ACTIVE_MEMBER });
+    teamUpdate.mockResolvedValue({
+      ...ACTIVE_MEMBER,
+      photoMimeType: "image/png",
+      photoData: PNG_BYTES,
+    });
+    const res = await itemPut(
+      makeReq("http://x/api/team/tm-1", {
+        method: "PUT",
+        body: {
+          name: "Ada",
+          role: "Advisor",
+          photoBase64: PNG_B64,
+          photoMimeType: "image/png",
+        },
+      }),
+      ctx,
+    );
+    expect(res.status).toBe(200);
+    const updateArgs = teamUpdate.mock.calls[0]?.[0] as {
+      data: { photoMimeType: string; photoData: Buffer };
+    };
+    expect(updateArgs.data.photoMimeType).toBe("image/png");
+    expect(Buffer.isBuffer(updateArgs.data.photoData)).toBe(true);
+  });
+
+  it("rejects PUT with a bad photo payload (400)", async () => {
+    mockSystemOwner();
+    teamFindUnique.mockResolvedValue({ ...ACTIVE_MEMBER });
+    const res = await itemPut(
+      makeReq("http://x/api/team/tm-1", {
+        method: "PUT",
+        body: {
+          name: "Ada",
+          role: "Advisor",
+          // PNG bytes but JPEG MIME — magic-byte sniff fails.
+          photoBase64: PNG_B64,
+          photoMimeType: "image/jpeg",
+        },
+      }),
+      ctx,
+    );
+    expect(res.status).toBe(400);
+    expect(teamUpdate).not.toHaveBeenCalled();
   });
 });
