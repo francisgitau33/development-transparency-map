@@ -111,7 +111,17 @@ export async function POST(request: NextRequest) {
       }),
     ]);
 
-    console.log(`Password reset successful for: ${normalizedEmail}`);
+    // Emit a non-PII structured event. We intentionally DO NOT log the user's
+    // email, the reset token, the reset URL, the new password, cookies, or
+    // authorization headers here. Only the opaque database user id is
+    // included so SYSTEM_OWNER operators can correlate with the audit log if
+    // required.
+    logger.info({
+      event: "reset_password.succeeded",
+      msg: "Password reset succeeded",
+      requestId,
+      ctx: { userId: user.id },
+    });
 
     return NextResponse.json({
       message: "Password has been reset successfully. You can now log in with your new password.",

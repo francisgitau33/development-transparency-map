@@ -20,6 +20,42 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Testing
+
+> **The canonical test command for this project is `bun run test`.**
+>
+> It executes `bunx vitest run` (see the `test` script in `package.json`) and
+> is the command used by CI, the Sprint 1 verification gate, and the Vercel
+> Preview release-readiness checklist.
+>
+> **Do NOT use `bun test`.** That invokes Bun's built-in, Jest-like native test
+> runner, which is *not* the project's test runner. Bun's native runner does
+> not understand Vitest's `vi.*` mock API, our `vitest.config.ts`, the
+> `happy-dom` environment, or the path aliases we rely on, and will report
+> false-positive failures on tests that pass under Vitest.
+
+```bash
+# Canonical — use this.
+bun run test
+
+# Watch mode (dev only).
+bun run test:watch
+
+# CI reporter.
+bun run test:ci
+```
+
+Other verification gates used by CI and the release-readiness checklist:
+
+```bash
+bunx tsc --noEmit   # typecheck
+bun run lint        # biome lint + tsc
+bun run build       # production build
+```
+
+We intentionally keep Vitest as the test framework; this note only
+disambiguates the *command* used to run it.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

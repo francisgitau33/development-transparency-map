@@ -435,6 +435,49 @@ no product features, no RBAC changes.
 
 ---
 
+## Vercel Preview environment variable checklist
+
+Use this list when provisioning a **Vercel Preview** environment (or any
+other production-like preview). Every variable below must be set on the
+preview environment in Vercel → Project → Settings → Environment
+Variables → "Preview". The build and smoke test (see
+`docs/operations/vercel-preview-smoke-test.md`) assume every row is
+present.
+
+| Variable | Set on Preview? | Scope | Notes |
+|---|---|---|---|
+| `RATE_LIMIT_BACKEND` | ✅ | Preview | Set to `redis` on preview to match production behaviour and to fail loud if Upstash env vars are missing. |
+| `UPSTASH_REDIS_REST_URL` | ✅ | Preview | Upstash REST endpoint for the preview database. Must be a **separate** Upstash DB from production. |
+| `UPSTASH_REDIS_REST_TOKEN` | ✅ | Preview | Bearer token for the preview Upstash DB. Never reuse the production token. |
+| `SENTRY_DSN` | ✅ | Preview | DSN for the Sentry project. Use a Preview-specific DSN or tag via `SENTRY_ENVIRONMENT=preview`. |
+| `SENTRY_ENVIRONMENT` | ✅ | Preview | Set to `preview` so Sentry events are not mixed with production. |
+| `JWT_SECRET` | ✅ | Preview | Cryptographically random, ≥ 32 bytes. Different from production. Rotating this invalidates all preview sessions — acceptable. |
+| `DATABASE_URL` | ✅ | Preview | Points at the **preview / staging** Postgres, never at production. Required migrations must be applied via the gated `db-migrate` workflow before the preview goes live. |
+| `HCAPTCHA_SECRET` | ✅ | Preview | Server-side hCaptcha secret. Must pair with `NEXT_PUBLIC_HCAPTCHA_SITE_KEY`. Missing value on production fails registration closed; on preview the same behaviour applies. |
+| `EMAIL_PROVIDER` | ✅ | Preview | e.g. `resend`. If unset, password-reset and notification emails are skipped with a warn log. |
+| `RESEND_API_KEY` | ✅ | Preview | Provider API key matching `EMAIL_PROVIDER`. Use a provider sandbox / test key on preview whenever possible. |
+| `EMAIL_FROM` | ✅ | Preview | Sender address verified with the chosen provider. |
+| `APP_URL` | ✅ | Preview | Absolute URL of the preview deployment, e.g. `https://dtmap-preview.vercel.app`. Used to build password-reset links. Must match the deployment host so emailed links resolve correctly. |
+| `SYSTEM_OWNER_EMAIL` | ✅ | Preview | Email of the initial System Owner for the preview database (used by `prisma/seed.ts`). |
+
+Also required if not already inherited from Vercel defaults:
+
+- `NEXT_PUBLIC_HCAPTCHA_SITE_KEY` — public site key for the widget.
+- `NODE_ENV` — Vercel sets this automatically.
+
+Derived variables (optional on preview):
+
+- `SENTRY_TRACES_SAMPLE_RATE` — float 0–1; leave unset (off) or set to
+  a small value for preview tracing.
+- `SYSTEM_OWNER_PASSWORD` — set only when seeding, then remove.
+
+**Rule of thumb:** a Vercel Preview deployment with any of the 13
+checklist variables above missing is NOT a valid production-like
+preview. Either set the variable or do not rely on the preview for
+release-readiness sign-off.
+
+---
+
 ## Next prompt candidates (out of scope here)
 
 These are tracked for awareness — they must not be started without
