@@ -35,6 +35,13 @@ export const AUDIT_ACTIONS = {
   TEAM_MEMBER_CREATED: "TEAM_MEMBER_CREATED",
   TEAM_MEMBER_UPDATED: "TEAM_MEMBER_UPDATED",
   TEAM_MEMBER_DELETED: "TEAM_MEMBER_DELETED",
+  // Home-page and public-links CMS (SYSTEM_OWNER-only). Stored under the
+  // CMS_UPDATED umbrella with a distinguishing entityType so audit
+  // consumers can filter by "CmsHome" / "CmsPublicLinks" without adding
+  // new action values. These constants are kept for clarity when a
+  // callsite wants to be explicit.
+  CMS_HOME_UPDATED: "CMS_HOME_UPDATED",
+  CMS_PUBLIC_LINKS_UPDATED: "CMS_PUBLIC_LINKS_UPDATED",
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

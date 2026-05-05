@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { PublicLayout } from "@/components/public/PublicLayout";
+import { PublicFooter } from "@/components/public/PublicFooter";
 import { LoadingState } from "@/components/shared/LoadingState";
 import { ErrorState } from "@/components/shared/ErrorState";
 import { Globe } from "lucide-react";
-import { BRANDING } from "@/lib/branding";
 
 interface CMSContent {
   title: string;
@@ -111,28 +111,7 @@ export default function AboutPage() {
           </div>
         </div>
 
-        <footer
-          data-design-id="about-footer"
-          className="bg-slate-900 text-white py-12"
-        >
-          <div
-            data-design-id="about-footer-container"
-            className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center"
-          >
-            <p
-              data-design-id="about-footer-brand"
-              className="text-lg font-semibold mb-2"
-            >
-              {BRANDING.productName}
-            </p>
-            <p
-              data-design-id="about-footer-tagline"
-              className="text-slate-400"
-            >
-              {BRANDING.tagline}
-            </p>
-          </div>
-        </footer>
+        <PublicFooter />
       </div>
     </PublicLayout>
   );

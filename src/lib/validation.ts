@@ -737,3 +737,259 @@ export function validateTeamMember(
         : undefined,
   };
 }
+
+// ---------------------------------------------------------------------------
+// CMS Home Page + Public Links validators
+// ---------------------------------------------------------------------------
+
+/**
+ * Character caps used by the Home-page CMS fields. Values chosen to be
+ * generous enough for marketing copy but tight enough to keep row sizes
+ * small and prevent accidental paste-bombs.
+ */
+export const CMS_HOME_TITLE_MAX_LENGTH = 200;
+export const CMS_HOME_SUBTITLE_MAX_LENGTH = 240;
+export const CMS_HOME_DESCRIPTION_MAX_LENGTH = 600;
+export const CMS_HOME_CTA_LABEL_MAX_LENGTH = 60;
+export const CMS_HOME_CTA_HREF_MAX_LENGTH = 500;
+
+export const CMS_PUBLIC_LINKS_URL_MAX_LENGTH = 500;
+export const CMS_PUBLIC_LINKS_EMAIL_MAX_LENGTH = 254;
+
+/**
+ * Accept the kind of hrefs we actually want in the homepage CTAs:
+ *   - Site-relative routes: `/`, `/map`, `/about/team`
+ *   - Absolute https/http URLs
+ * Anything else (javascript:, mailto:, data:, etc) is rejected to keep
+ * the CMS from being used as an XSS vector.
+ */
+function normalizeCtaHrefOrNull(
+  value: unknown,
+  fieldLabel: string,
+): { value: string | null; error: string | null } {
+  const trimmed = normalizeString(value);
+  if (trimmed.length === 0) return { value: null, error: null };
+  if (trimmed.length > CMS_HOME_CTA_HREF_MAX_LENGTH) {
+    return {
+      value: null,
+      error: `${fieldLabel} must be ${CMS_HOME_CTA_HREF_MAX_LENGTH} characters or fewer`,
+    };
+  }
+  if (trimmed.startsWith("/")) {
+    return { value: trimmed, error: null };
+  }
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return {
+        value: null,
+        error: `${fieldLabel} must start with "/" or be an http(s) URL`,
+      };
+    }
+    return { value: trimmed, error: null };
+  } catch {
+    return {
+      value: null,
+      error: `${fieldLabel} must start with "/" or be a valid URL`,
+    };
+  }
+}
+
+function normalizeHttpsUrlOrNull(
+  value: unknown,
+  fieldLabel: string,
+): { value: string | null; error: string | null } {
+  const trimmed = normalizeString(value);
+  if (trimmed.length === 0) return { value: null, error: null };
+  if (trimmed.length > CMS_PUBLIC_LINKS_URL_MAX_LENGTH) {
+    return {
+      value: null,
+      error: `${fieldLabel} must be ${CMS_PUBLIC_LINKS_URL_MAX_LENGTH} characters or fewer`,
+    };
+  }
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== "https:") {
+      return {
+        value: null,
+        error: `${fieldLabel} must start with https://`,
+      };
+    }
+    if (!url.hostname) {
+      return { value: null, error: `${fieldLabel} must include a host` };
+    }
+    return { value: trimmed, error: null };
+  } catch {
+    return { value: null, error: `${fieldLabel} must be a valid https URL` };
+  }
+}
+
+/**
+ * Pragmatic email validator — RFC-compliant enough for CMS settings.
+ * Mirrors the shape used by registration + password-reset flows: one
+ * local part, "@", a hostname with at least one dot, and no
+ * whitespace.
+ */
+const EMAIL_PATTERN =
+  /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function normalizeEmailOrNull(
+  value: unknown,
+  fieldLabel: string,
+): { value: string | null; error: string | null } {
+  const trimmed = normalizeString(value);
+  if (trimmed.length === 0) return { value: null, error: null };
+  if (trimmed.length > CMS_PUBLIC_LINKS_EMAIL_MAX_LENGTH) {
+    return {
+      value: null,
+      error: `${fieldLabel} must be ${CMS_PUBLIC_LINKS_EMAIL_MAX_LENGTH} characters or fewer`,
+    };
+  }
+  if (!EMAIL_PATTERN.test(trimmed)) {
+    return { value: null, error: `${fieldLabel} must be a valid email address` };
+  }
+  return { value: trimmed.toLowerCase(), error: null };
+}
+
+export interface CmsHomeNormalized {
+  heroTitle: string;
+  heroSubtitle: string;
+  heroDescription: string | null;
+  primaryCtaLabel: string | null;
+  primaryCtaHref: string | null;
+  secondaryCtaLabel: string | null;
+  secondaryCtaHref: string | null;
+}
+
+export function validateCmsHomeContent(
+  data: Record<string, unknown>,
+): ValidationResult {
+  const errors: string[] = [];
+
+  const heroTitle = normalizeString(data.heroTitle);
+  if (heroTitle.length === 0) {
+    errors.push("Hero title is required");
+  } else if (heroTitle.length > CMS_HOME_TITLE_MAX_LENGTH) {
+    errors.push(
+      `Hero title must be ${CMS_HOME_TITLE_MAX_LENGTH} characters or fewer`,
+    );
+  }
+
+  const heroSubtitle = normalizeString(data.heroSubtitle);
+  if (heroSubtitle.length === 0) {
+    errors.push("Hero subtitle is required");
+  } else if (heroSubtitle.length > CMS_HOME_SUBTITLE_MAX_LENGTH) {
+    errors.push(
+      `Hero subtitle must be ${CMS_HOME_SUBTITLE_MAX_LENGTH} characters or fewer`,
+    );
+  }
+
+  const descriptionRaw = normalizeString(data.heroDescription);
+  let heroDescription: string | null = null;
+  if (descriptionRaw.length > 0) {
+    if (descriptionRaw.length > CMS_HOME_DESCRIPTION_MAX_LENGTH) {
+      errors.push(
+        `Hero description must be ${CMS_HOME_DESCRIPTION_MAX_LENGTH} characters or fewer`,
+      );
+    } else {
+      heroDescription = descriptionRaw;
+    }
+  }
+
+  const primaryLabelRaw = normalizeString(data.primaryCtaLabel);
+  let primaryCtaLabel: string | null = null;
+  if (primaryLabelRaw.length > 0) {
+    if (primaryLabelRaw.length > CMS_HOME_CTA_LABEL_MAX_LENGTH) {
+      errors.push(
+        `Primary CTA label must be ${CMS_HOME_CTA_LABEL_MAX_LENGTH} characters or fewer`,
+      );
+    } else {
+      primaryCtaLabel = primaryLabelRaw;
+    }
+  }
+  const primaryHref = normalizeCtaHrefOrNull(
+    data.primaryCtaHref,
+    "Primary CTA link",
+  );
+  if (primaryHref.error) errors.push(primaryHref.error);
+
+  const secondaryLabelRaw = normalizeString(data.secondaryCtaLabel);
+  let secondaryCtaLabel: string | null = null;
+  if (secondaryLabelRaw.length > 0) {
+    if (secondaryLabelRaw.length > CMS_HOME_CTA_LABEL_MAX_LENGTH) {
+      errors.push(
+        `Secondary CTA label must be ${CMS_HOME_CTA_LABEL_MAX_LENGTH} characters or fewer`,
+      );
+    } else {
+      secondaryCtaLabel = secondaryLabelRaw;
+    }
+  }
+  const secondaryHref = normalizeCtaHrefOrNull(
+    data.secondaryCtaHref,
+    "Secondary CTA link",
+  );
+  if (secondaryHref.error) errors.push(secondaryHref.error);
+
+  // Cross-field: if a label is present the href must also be present
+  // (and vice versa). Rendering an orphan label-without-href would be
+  // confusing; a href-without-label would render no clickable CTA.
+  if (primaryCtaLabel && !primaryHref.value) {
+    errors.push("Primary CTA link is required when a label is provided");
+  }
+  if (primaryHref.value && !primaryCtaLabel) {
+    errors.push("Primary CTA label is required when a link is provided");
+  }
+  if (secondaryCtaLabel && !secondaryHref.value) {
+    errors.push("Secondary CTA link is required when a label is provided");
+  }
+  if (secondaryHref.value && !secondaryCtaLabel) {
+    errors.push("Secondary CTA label is required when a link is provided");
+  }
+
+  const normalized: CmsHomeNormalized = {
+    heroTitle,
+    heroSubtitle,
+    heroDescription,
+    primaryCtaLabel,
+    primaryCtaHref: primaryHref.value,
+    secondaryCtaLabel,
+    secondaryCtaHref: secondaryHref.value,
+  };
+
+  return {
+    valid: errors.length === 0,
+    errors,
+    normalizedData: errors.length === 0 ? { ...normalized } : undefined,
+  };
+}
+
+export interface CmsPublicLinksNormalized {
+  linkedinUrl: string | null;
+  mediumUrl: string | null;
+  contactEmail: string | null;
+}
+
+export function validateCmsPublicLinks(
+  data: Record<string, unknown>,
+): ValidationResult {
+  const errors: string[] = [];
+
+  const linkedin = normalizeHttpsUrlOrNull(data.linkedinUrl, "LinkedIn URL");
+  if (linkedin.error) errors.push(linkedin.error);
+  const medium = normalizeHttpsUrlOrNull(data.mediumUrl, "Medium URL");
+  if (medium.error) errors.push(medium.error);
+  const email = normalizeEmailOrNull(data.contactEmail, "Contact email");
+  if (email.error) errors.push(email.error);
+
+  const normalized: CmsPublicLinksNormalized = {
+    linkedinUrl: linkedin.value,
+    mediumUrl: medium.value,
+    contactEmail: email.value,
+  };
+
+  return {
+    valid: errors.length === 0,
+    errors,
+    normalizedData: errors.length === 0 ? { ...normalized } : undefined,
+  };
+}

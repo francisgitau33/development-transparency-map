@@ -14,6 +14,8 @@ import {
   Map as MapIcon,
   HandCoins,
   Users,
+  Home as HomeIcon,
+  Link2,
 } from "lucide-react";
 
 export default function CMSPage() {
@@ -130,6 +132,48 @@ export default function CMSPage() {
             <Link href="/dashboard/cms/donors">
               <Button className="w-full">
                 Manage Donors
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        <Card data-design-id="cms-home-card" className="hover:shadow-lg transition-shadow">
+          <CardHeader>
+            <div className="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center mb-4">
+              <HomeIcon className="w-6 h-6 text-indigo-600" />
+            </div>
+            <CardTitle>Home Page</CardTitle>
+            <CardDescription>
+              Edit the hero title, subtitle, description, and call-to-action
+              buttons shown on the public homepage.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/dashboard/cms/home">
+              <Button className="w-full">
+                Edit Home Page
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        <Card data-design-id="cms-public-links-card" className="hover:shadow-lg transition-shadow">
+          <CardHeader>
+            <div className="w-12 h-12 bg-teal-100 rounded-lg flex items-center justify-center mb-4">
+              <Link2 className="w-6 h-6 text-teal-600" />
+            </div>
+            <CardTitle>Public Links</CardTitle>
+            <CardDescription>
+              Configure the social media links and public contact email shown
+              in the footer of the Home and About pages.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/dashboard/cms/public-links">
+              <Button className="w-full">
+                Edit Public Links
                 <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
             </Link>

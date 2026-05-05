@@ -23,6 +23,8 @@ model User {
   createdProjects     Project[]            @relation("CreatedBy")
   uploadJobs          UploadJob[]
   cmsUpdates          CmsAbout[]           @relation("UpdatedBy")
+  cmsHomeUpdates      CmsHome[]            @relation("CmsHomeUpdatedBy")
+  cmsPublicLinkUpdates CmsPublicLinks[]    @relation("CmsPublicLinksUpdatedBy")
 }
 
 // Roles - only SYSTEM_OWNER and PARTNER_ADMIN
@@ -391,6 +393,42 @@ model CmsAbout {
   updatedByUserId String?
 
   updatedBy User? @relation("UpdatedBy", fields: [updatedByUserId], references: [id])
+}
+
+// CMS Home page content — single-row table (singleton) holding the
+// SYSTEM_OWNER-editable copy for the public homepage hero section. The
+// API keeps exactly one row at all times (creates one if none exists,
+// always PATCHes the first row). If the row is missing, the public page
+// falls back to the hardcoded BRANDING constants so the site never
+// breaks because CMS data is absent.
+model CmsHome {
+  id                 String   @id @default(cuid())
+  heroTitle          String
+  heroSubtitle       String
+  heroDescription    String?
+  primaryCtaLabel    String?
+  primaryCtaHref     String?
+  secondaryCtaLabel  String?
+  secondaryCtaHref   String?
+  updatedAt          DateTime @updatedAt
+  updatedByUserId    String?
+
+  updatedBy User? @relation("CmsHomeUpdatedBy", fields: [updatedByUserId], references: [id])
+}
+
+// CMS Public Links — single-row table (singleton) holding configurable
+// social-media URLs and the public contact email. All fields are
+// optional: blank values simply cause the corresponding icon / line to
+// be hidden publicly. Only SYSTEM_OWNER may mutate.
+model CmsPublicLinks {
+  id              String   @id @default(cuid())
+  linkedinUrl     String?
+  mediumUrl       String?
+  contactEmail    String?
+  updatedAt       DateTime @updatedAt
+  updatedByUserId String?
+
+  updatedBy User? @relation("CmsPublicLinksUpdatedBy", fields: [updatedByUserId], references: [id])
 }
 
 // Our Team — public CMS-managed list of team members. Only SYSTEM_OWNERs

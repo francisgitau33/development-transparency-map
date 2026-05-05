@@ -532,6 +532,42 @@ async function main() {
     console.log("Seeded default CMS about content");
   }
 
+  // Seed default CMS home page content — defaults mirror the BRANDING
+  // constants so the public homepage looks the same before/after the CMS
+  // table is introduced. Idempotent: only creates a row if none exists.
+  const existingHome = await prisma.cmsHome.findFirst();
+  if (!existingHome) {
+    await prisma.cmsHome.create({
+      data: {
+        heroTitle: "Mapping Development. Enabling Transparency.",
+        heroSubtitle: "See who is implementing what, where.",
+        heroDescription:
+          "A public geospatial platform for development projects worldwide.",
+        primaryCtaLabel: "Explore the Map",
+        primaryCtaHref: "/map",
+        secondaryCtaLabel: null,
+        secondaryCtaHref: null,
+      },
+    });
+    console.log("Seeded default CMS home content");
+  }
+
+  // Seed an empty Public Links row so the SYSTEM_OWNER has a record to
+  // edit in the CMS the first time they open the page. All fields are
+  // optional — blank values cause the corresponding footer elements to
+  // be hidden on public pages.
+  const existingPublicLinks = await prisma.cmsPublicLinks.findFirst();
+  if (!existingPublicLinks) {
+    await prisma.cmsPublicLinks.create({
+      data: {
+        linkedinUrl: null,
+        mediumUrl: null,
+        contactEmail: null,
+      },
+    });
+    console.log("Seeded default CMS public links (empty)");
+  }
+
   console.log("Seeding completed!");
 }
 

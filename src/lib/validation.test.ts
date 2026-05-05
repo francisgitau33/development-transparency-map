@@ -10,6 +10,13 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  CMS_HOME_CTA_HREF_MAX_LENGTH,
+  CMS_HOME_CTA_LABEL_MAX_LENGTH,
+  CMS_HOME_DESCRIPTION_MAX_LENGTH,
+  CMS_HOME_SUBTITLE_MAX_LENGTH,
+  CMS_HOME_TITLE_MAX_LENGTH,
+  CMS_PUBLIC_LINKS_EMAIL_MAX_LENGTH,
+  CMS_PUBLIC_LINKS_URL_MAX_LENGTH,
   DONOR_FUNDING_CODE_MAX_LENGTH,
   TEAM_MEMBER_BIO_MAX_LENGTH,
   TEAM_MEMBER_NAME_MAX_LENGTH,
@@ -19,6 +26,8 @@ import {
   parseOptionalPopulation,
   parseOptionalPopulationYear,
   validateAdministrativeArea,
+  validateCmsHomeContent,
+  validateCmsPublicLinks,
   validateOrganization,
   validateProject,
   validateTeamMember,
@@ -533,5 +542,185 @@ describe("validateTeamMemberPhoto", () => {
   it("rejects an empty payload after decoding", () => {
     const r = validateTeamMemberPhoto(b64(Buffer.alloc(0)), "image/jpeg");
     expect(r.valid).toBe(false);
+  });
+});
+// ---------------------------------------------------------------------------
+// CMS Home Page + Public Links
+// ---------------------------------------------------------------------------
+
+describe("validateCmsHomeContent", () => {
+  const base = {
+    heroTitle: "Mapping Development. Enabling Transparency.",
+    heroSubtitle: "See who is implementing what, where.",
+    heroDescription: "A public geospatial platform.",
+    primaryCtaLabel: "Explore the Map",
+    primaryCtaHref: "/map",
+    secondaryCtaLabel: "",
+    secondaryCtaHref: "",
+  };
+
+  it("accepts a minimal valid payload (title + subtitle only)", () => {
+    const r = validateCmsHomeContent({
+      heroTitle: "Title",
+      heroSubtitle: "Subtitle",
+    });
+    expect(r.valid).toBe(true);
+    expect(r.normalizedData).toMatchObject({
+      heroTitle: "Title",
+      heroSubtitle: "Subtitle",
+      heroDescription: null,
+      primaryCtaLabel: null,
+      primaryCtaHref: null,
+      secondaryCtaLabel: null,
+      secondaryCtaHref: null,
+    });
+  });
+
+  it("accepts site-relative primary CTA hrefs", () => {
+    const r = validateCmsHomeContent(base);
+    expect(r.valid).toBe(true);
+    expect(r.normalizedData).toMatchObject({ primaryCtaHref: "/map" });
+  });
+
+  it("accepts absolute https:// primary CTA hrefs", () => {
+    const r = validateCmsHomeContent({
+      ...base,
+      primaryCtaHref: "https://example.org/path",
+    });
+    expect(r.valid).toBe(true);
+  });
+
+  it("rejects javascript: and mailto: hrefs", () => {
+    for (const href of ["javascript:alert(1)", "mailto:foo@bar.com", "data:text/html,x"]) {
+      const r = validateCmsHomeContent({ ...base, primaryCtaHref: href });
+      expect(r.valid).toBe(false);
+    }
+  });
+
+  it("rejects missing title / subtitle", () => {
+    const r1 = validateCmsHomeContent({ heroTitle: "", heroSubtitle: "S" });
+    expect(r1.valid).toBe(false);
+    expect(r1.errors.join(" ")).toMatch(/title/i);
+    const r2 = validateCmsHomeContent({ heroTitle: "T", heroSubtitle: "" });
+    expect(r2.valid).toBe(false);
+    expect(r2.errors.join(" ")).toMatch(/subtitle/i);
+  });
+
+  it("rejects a label without a link (primary)", () => {
+    const r = validateCmsHomeContent({
+      ...base,
+      primaryCtaLabel: "Go",
+      primaryCtaHref: "",
+    });
+    expect(r.valid).toBe(false);
+    expect(r.errors.join(" ")).toMatch(/primary cta link is required/i);
+  });
+
+  it("rejects a link without a label (secondary)", () => {
+    const r = validateCmsHomeContent({
+      ...base,
+      secondaryCtaLabel: "",
+      secondaryCtaHref: "/about",
+    });
+    expect(r.valid).toBe(false);
+    expect(r.errors.join(" ")).toMatch(/secondary cta label is required/i);
+  });
+
+  it("enforces character caps", () => {
+    const r = validateCmsHomeContent({
+      heroTitle: "x".repeat(CMS_HOME_TITLE_MAX_LENGTH + 1),
+      heroSubtitle: "x".repeat(CMS_HOME_SUBTITLE_MAX_LENGTH + 1),
+      heroDescription: "x".repeat(CMS_HOME_DESCRIPTION_MAX_LENGTH + 1),
+      primaryCtaLabel: "x".repeat(CMS_HOME_CTA_LABEL_MAX_LENGTH + 1),
+      primaryCtaHref: `/${"x".repeat(CMS_HOME_CTA_HREF_MAX_LENGTH)}`,
+    });
+    expect(r.valid).toBe(false);
+    expect(r.errors.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it("trims whitespace around all fields", () => {
+    const r = validateCmsHomeContent({
+      heroTitle: "  Title  ",
+      heroSubtitle: "  Sub  ",
+      heroDescription: "  Desc  ",
+    });
+    expect(r.valid).toBe(true);
+    expect(r.normalizedData).toMatchObject({
+      heroTitle: "Title",
+      heroSubtitle: "Sub",
+      heroDescription: "Desc",
+    });
+  });
+});
+
+describe("validateCmsPublicLinks", () => {
+  it("accepts an entirely empty payload (all optional)", () => {
+    const r = validateCmsPublicLinks({});
+    expect(r.valid).toBe(true);
+    expect(r.normalizedData).toEqual({
+      linkedinUrl: null,
+      mediumUrl: null,
+      contactEmail: null,
+    });
+  });
+
+  it("accepts valid https URLs and emails", () => {
+    const r = validateCmsPublicLinks({
+      linkedinUrl: "https://www.linkedin.com/company/foo",
+      mediumUrl: "https://medium.com/@foo",
+      contactEmail: "Hello@Example.ORG",
+    });
+    expect(r.valid).toBe(true);
+    expect(r.normalizedData).toEqual({
+      linkedinUrl: "https://www.linkedin.com/company/foo",
+      mediumUrl: "https://medium.com/@foo",
+      contactEmail: "hello@example.org",
+    });
+  });
+
+  it("rejects non-https URLs", () => {
+    const r = validateCmsPublicLinks({
+      linkedinUrl: "http://linkedin.com/x",
+      mediumUrl: "ftp://medium.com/x",
+    });
+    expect(r.valid).toBe(false);
+    expect(r.errors.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("rejects garbage URLs", () => {
+    const r = validateCmsPublicLinks({ linkedinUrl: "not a url" });
+    expect(r.valid).toBe(false);
+  });
+
+  it("rejects invalid email addresses", () => {
+    for (const bad of ["not-an-email", "foo@", "@example.org", "a@b", "a b@c.d"]) {
+      const r = validateCmsPublicLinks({ contactEmail: bad });
+      expect(r.valid).toBe(false);
+      expect(r.errors.join(" ")).toMatch(/contact email/i);
+    }
+  });
+
+  it("enforces URL and email length caps", () => {
+    const tooLongUrl = `https://example.org/${"x".repeat(CMS_PUBLIC_LINKS_URL_MAX_LENGTH)}`;
+    const tooLongEmail = `${"x".repeat(CMS_PUBLIC_LINKS_EMAIL_MAX_LENGTH)}@example.org`;
+    const r = validateCmsPublicLinks({
+      linkedinUrl: tooLongUrl,
+      contactEmail: tooLongEmail,
+    });
+    expect(r.valid).toBe(false);
+  });
+
+  it("treats blank-string inputs the same as missing", () => {
+    const r = validateCmsPublicLinks({
+      linkedinUrl: "   ",
+      mediumUrl: "",
+      contactEmail: "  ",
+    });
+    expect(r.valid).toBe(true);
+    expect(r.normalizedData).toEqual({
+      linkedinUrl: null,
+      mediumUrl: null,
+      contactEmail: null,
+    });
   });
 });
