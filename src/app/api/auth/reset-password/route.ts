@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcrypt";
+import { getOrCreateRequestId, logger } from "@/lib/logger";
 
 /**
  * Reset Password API
@@ -15,6 +16,7 @@ import bcrypt from "bcrypt";
  */
 
 export async function POST(request: NextRequest) {
+  const requestId = getOrCreateRequestId(request.headers);
   try {
     const { email, token, password } = await request.json();
 
@@ -115,10 +117,15 @@ export async function POST(request: NextRequest) {
       message: "Password has been reset successfully. You can now log in with your new password.",
     });
   } catch (error) {
-    console.error("Reset password error:", error);
+    logger.error({
+      event: "reset_password.unhandled_error",
+      msg: "Reset-password route threw an unhandled error",
+      requestId,
+      error,
+    });
     return NextResponse.json(
       { error: "An error occurred. Please try again." },
-      { status: 500 }
+      { status: 500, headers: { "x-request-id": requestId } },
     );
   }
 }
@@ -128,6 +135,7 @@ export async function POST(request: NextRequest) {
  * Used by the reset password page to check if token is still valid
  */
 export async function GET(request: NextRequest) {
+  const requestId = getOrCreateRequestId(request.headers);
   try {
     const { searchParams } = new URL(request.url);
     const email = searchParams.get("email");
@@ -167,10 +175,15 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ valid: false, error: "Invalid token" });
   } catch (error) {
-    console.error("Validate token error:", error);
+    logger.error({
+      event: "reset_password.validate_token_failed",
+      msg: "Reset-password validate-token route threw an unhandled error",
+      requestId,
+      error,
+    });
     return NextResponse.json(
       { valid: false, error: "An error occurred" },
-      { status: 500 }
+      { status: 500, headers: { "x-request-id": requestId } },
     );
   }
 }

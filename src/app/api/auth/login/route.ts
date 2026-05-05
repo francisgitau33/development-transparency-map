@@ -12,12 +12,14 @@ import {
   RATE_LIMITS,
   rateLimitedResponse,
 } from "@/lib/rate-limit";
+import { getOrCreateRequestId, logger } from "@/lib/logger";
 
 export async function POST(request: NextRequest) {
+  const requestId = getOrCreateRequestId(request.headers);
   try {
     // Server-side rate limit: 10 / min / IP. Neutral wording on 429 —
     // does not reveal whether an account exists.
-    const rl = checkRateLimit({
+    const rl = await checkRateLimit({
       bucket: "login",
       key: getClientIp(request),
       limit: RATE_LIMITS.login.limit,
@@ -107,10 +109,15 @@ export async function POST(request: NextRequest) {
       message: "Login successful",
     });
   } catch (error) {
-    console.error("Login error:", error);
+    logger.error({
+      event: "login.unhandled_error",
+      msg: "Login route threw an unhandled error",
+      requestId,
+      error,
+    });
     return NextResponse.json(
       { error: "Login failed. Please try again." },
-      { status: 500 }
+      { status: 500, headers: { "x-request-id": requestId } },
     );
   }
 }

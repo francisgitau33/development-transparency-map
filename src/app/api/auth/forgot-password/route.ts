@@ -13,6 +13,7 @@ import {
   RATE_LIMITS,
   rateLimitedResponse,
 } from "@/lib/rate-limit";
+import { getOrCreateRequestId, logger } from "@/lib/logger";
 
 /**
  * Forgot Password API
@@ -42,10 +43,11 @@ function resolveBaseUrl(request: NextRequest): string {
 }
 
 export async function POST(request: NextRequest) {
+  const requestId = getOrCreateRequestId(request.headers);
   try {
     // Aggressive rate limit on forgot-password to slow down enumeration /
     // email-bomb attacks. Neutral 429 wording keeps enumeration hard.
-    const rl = checkRateLimit({
+    const rl = await checkRateLimit({
       bucket: "forgot-password",
       key: getClientIp(request),
       limit: RATE_LIMITS.forgotPassword.limit,
@@ -115,17 +117,19 @@ export async function POST(request: NextRequest) {
       if (err instanceof EmailNotConfiguredError) {
         // Critical: in production this must be visible to operators but MUST
         // NOT leak the token to the client. Keep the neutral response.
-        console.error(
-          "[forgot-password] Email provider misconfigured; reset email NOT sent.",
-          err.message,
-        );
+        logger.error({
+          event: "forgot_password.email_not_configured",
+          msg: "Email provider misconfigured; reset email NOT sent",
+          requestId,
+          error: err,
+        });
         if (process.env.NODE_ENV === "production") {
           return NextResponse.json(
             {
               error:
                 "Password reset is temporarily unavailable. Please contact support.",
             },
-            { status: 500 },
+            { status: 500, headers: { "x-request-id": requestId } },
           );
         }
         // Non-production: also avoid emitting the URL in the response, but
@@ -133,7 +137,12 @@ export async function POST(request: NextRequest) {
         // have printed it above. We land here only if someone explicitly
         // set EMAIL_PROVIDER to an unusable value in dev.
       } else {
-        console.error("[forgot-password] Email delivery failed:", err);
+        logger.error({
+          event: "forgot_password.email_delivery_failed",
+          msg: "Password-reset email delivery failed",
+          requestId,
+          error: err,
+        });
         // Do not reveal the failure to the caller; keep the neutral response
         // so attackers can't distinguish delivery states either.
       }
@@ -141,10 +150,15 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(neutralResponse);
   } catch (error) {
-    console.error("Forgot password error:", error);
+    logger.error({
+      event: "forgot_password.unhandled_error",
+      msg: "Forgot-password route threw an unhandled error",
+      requestId,
+      error,
+    });
     return NextResponse.json(
       { error: "An error occurred. Please try again." },
-      { status: 500 },
+      { status: 500, headers: { "x-request-id": requestId } },
     );
   }
 }

@@ -35,6 +35,22 @@ Other variables you may set:
 - `BUILD_DIR` — lets you keep multiple build outputs side-by-side during
   CI / rollbacks (the CI workflow uses `.next-build-ci`).
 
+### Sprint 1 production hardening — additional variables
+
+Added as part of the production-hardening sprint. The first two are
+**required** for any multi-replica deployment (e.g. Vercel). Without
+them, the rate limiter falls back to a process-local in-memory counter
+that can be trivially bypassed by hitting different replicas.
+
+| Variable | Required? | Used by | Notes |
+|---|---|---|---|
+| `UPSTASH_REDIS_REST_URL` | ✅ (production, multi-replica) | `src/lib/rate-limit.ts` | Upstash-compatible Redis REST endpoint, e.g. `https://<id>.upstash.io`. When blank, the limiter falls back to in-memory. |
+| `UPSTASH_REDIS_REST_TOKEN` | ✅ with URL | `src/lib/rate-limit.ts` | Bearer token for the REST endpoint. If URL is set without token, the limiter refuses to use Redis and logs a fallback warning. |
+| `RATE_LIMIT_BACKEND` | optional | `src/lib/rate-limit.ts` | `auto` (default): use Upstash when configured, otherwise in-memory. `redis`: force Upstash — throws at first request if env vars are missing. `memory`: force in-memory — only for tests. |
+| `SENTRY_DSN` | recommended (production) | `src/instrumentation.ts`, `src/lib/logger.ts` | Activates Sentry error reporting. When blank, Sentry is inert — the structured logger still emits JSON lines to stdout/stderr, but errors are not forwarded to Sentry. |
+| `SENTRY_ENVIRONMENT` | optional | `src/instrumentation.ts` | Labels Sentry events (`production`, `staging`, `preview`). Defaults to `NODE_ENV`. |
+| `SENTRY_TRACES_SAMPLE_RATE` | optional | `src/instrumentation.ts` | Float 0–1. Defaults to 0 (off). |
+
 **Never commit** real values of any of the above. Use your platform's
 secret manager. The `.env` file in the repo is a developer convenience
 only and MUST contain placeholders or be `.gitignore`d.
@@ -345,13 +361,91 @@ the country-context API contract are unchanged.
 
 ---
 
+## Sprint 1 production hardening (summary)
+
+This section summarises the production-hardening changes shipped in
+Sprint 1 following the Systems Engineering Review. They are additive —
+no product features, no RBAC changes.
+
+### HTTP security headers
+- `Content-Security-Policy`, `Strict-Transport-Security`,
+  `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`,
+  `Referrer-Policy: strict-origin-when-cross-origin`, and a narrow
+  `Permissions-Policy` are emitted by `next.config.js` for every
+  production response. A looser development-only CSP is used so the
+  Next.js dev server + Design Mode tooling keep working.
+- Documented CSP exceptions (intentional):
+  - `script-src 'unsafe-inline' 'unsafe-eval'` — required by Next.js 15
+    App Router; nonce-based CSP is tracked as a follow-up.
+  - `style-src 'unsafe-inline'` — Tailwind + Radix / shadcn runtime
+    style injection.
+  - `img-src https:` — user-supplied organisation logos, team photos,
+    CMS images, and map imagery come from arbitrary HTTPS hosts.
+- Verification: `curl -I https://<env>/ | grep -iE 'content-security|strict-transport|x-frame|x-content-type|referrer-policy|permissions-policy'`.
+
+### Rate limiting (Upstash)
+- `src/lib/rate-limit.ts` now uses Upstash Redis via the REST API when
+  `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` are set. Falls
+  back to the process-local in-memory counter otherwise (safe for dev
+  and CI, NOT safe for multi-replica production).
+- On any Upstash error the limiter fails open to in-memory and logs a
+  structured `rate_limit.redis_fallback` warning so the incident is
+  visible in Sentry / log aggregation.
+- All existing call sites (`/api/auth/login`, `/api/auth/register`,
+  `/api/auth/forgot-password`, `/api/upload`) use the same shape —
+  only the type is now `Promise<RateLimitResult>`.
+
+### Structured logging + Sentry
+- `src/lib/logger.ts` emits single-line JSON at info / warn / error
+  levels and deep-redacts secret-like keys (`password`, `token`,
+  `secret`, `authorization`, `cookie`, `apiKey`, `resetLink`,
+  `resetUrl`, and any `body` / `requestBody` / `rawBody`). `resetLink`
+  and `resetUrl` are never logged — forgot-password tokens are
+  delivered through `src/lib/email.ts` only.
+- `src/instrumentation.ts` activates `@sentry/nextjs` when `SENTRY_DSN`
+  is set, with `beforeSend` redacting `Authorization` / `Cookie` /
+  `X-API-Key` / request body. `onRequestError` forwards unhandled
+  errors to Sentry.
+- Every API response from the auth / upload routes now includes an
+  `x-request-id` header. The middleware at `src/middleware.ts`
+  attaches the same header to every `/api/**` and `/dashboard/**`
+  response, honouring inbound `x-request-id` / `x-vercel-id`.
+- Logger redaction is covered by `src/lib/logger.test.ts` (12 tests,
+  including "secret string must not appear in log output").
+
+### Build-time quality gates
+- `next.config.js` no longer sets `typescript.ignoreBuildErrors` or
+  `eslint.ignoreDuringBuilds`. `bunx tsc --noEmit` and `bunx biome
+  lint ./src` now block release on failure.
+
+### Deployment target
+- Vercel is the single production deployment target. `Dockerfile`,
+  `Dockerfile.base`, and `netlify.toml` have been moved under
+  `deploy/inactive/` with a README explaining their inactive status.
+  `vercel.json` + `next.config.js` (`distDir: .next-build`) remain
+  consistent and match `.github/workflows/quality.yml`.
+
+### Database operations
+- `docs/operations/database-backup-restore.md` covers backup cadence
+  (provider PITR + weekly `pg_dump`), quarterly restore drill, RPO ≤
+  24 h / RTO ≤ 4 h assumptions, and the production migration process.
+- `.github/workflows/db-migrate.yml` gates `prisma migrate deploy`
+  behind a manual `workflow_dispatch` + typed "MIGRATE" confirmation +
+  GitHub Environment required reviewer.
+
+---
+
 ## Next prompt candidates (out of scope here)
 
 These are tracked for awareness — they must not be started without
 explicit approval.
 
-- **Multi-replica rate limiting**: swap the in-memory rate-limit store in
-  `src/lib/rate-limit.ts` for a Redis / Upstash-backed store.
+- ~~**Multi-replica rate limiting**~~: **Done in Sprint 1**. Upstash
+  Redis REST backend with in-memory fallback — see
+  `src/lib/rate-limit.ts`, the new `UPSTASH_REDIS_REST_URL` /
+  `UPSTASH_REDIS_REST_TOKEN` env vars above, and
+  `src/lib/rate-limit.test.ts` for coverage of allowed / blocked /
+  reset-window / Upstash / fallback paths.
 - **Playwright smoke test**: once a stable seed DB is available in CI,
   add a single `public homepage → map → login` smoke flow.
 - **Email deployment configuration**: per-provider runbook (Resend,

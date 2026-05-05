@@ -1,0 +1,88 @@
+name: Database Migrate (Production)
+
+# Approval-gated workflow. Runs `prisma migrate deploy` against the
+# selected environment. It is NOT triggered on every push — deliberately
+# manual so the operator controls timing (see
+# docs/operations/database-backup-restore.md §4c).
+#
+# How this is gated
+# -----------------
+#   - `workflow_dispatch` — can only be triggered from the Actions UI.
+#   - `environment:` — points at a GitHub Environment configured with
+#     required reviewers. The `production` environment pauses the job
+#     until an approver clicks "Approve and deploy".
+#   - `DATABASE_URL` is a **secret** on the selected Environment — not
+#     on the repository. Developers cannot exfiltrate it through logs
+#     because `prisma migrate deploy` does not print it.
+#
+# Runbook (summary)
+# -----------------
+#   1. Merge the migration PR into `main`.
+#   2. Actions → Database Migrate (Production) → Run workflow.
+#   3. Pick `production` (or `staging`).
+#   4. Wait for the required reviewer to approve.
+#   5. When the job is green, deploy the app on Vercel.
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Target environment (production or staging)"
+        required: true
+        default: "staging"
+        type: choice
+        options:
+          - staging
+          - production
+      confirm:
+        description: 'Type "MIGRATE" to confirm'
+        required: true
+        type: string
+
+concurrency:
+  group: db-migrate-${{ github.event.inputs.target }}
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: prisma migrate deploy (${{ github.event.inputs.target }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # Binds this job to the named GitHub Environment, which enforces
+    # required reviewers and holds the real `DATABASE_URL` secret.
+    environment: ${{ github.event.inputs.target }}
+
+    steps:
+      - name: Validate confirm input
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "MIGRATE" ]; then
+            echo "::error::Confirmation string did not match 'MIGRATE'. Aborting."
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Show pending migrations (read-only)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: bunx prisma migrate status
+
+      - name: Apply pending migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: bunx prisma migrate deploy
+
+      - name: Confirm final state
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: bunx prisma migrate status

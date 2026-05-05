@@ -15,13 +15,15 @@ import {
   rateLimitedResponse,
 } from "@/lib/rate-limit";
 import { isCaptchaConfigured, verifyCaptchaToken } from "@/lib/captcha";
+import { getOrCreateRequestId, logger } from "@/lib/logger";
 
 export async function POST(request: NextRequest) {
+  const requestId = getOrCreateRequestId(request.headers);
   try {
     // Rate-limit: 10/min/IP. Keeps botnets from mass-creating accounts
     // even if CAPTCHA enforcement is temporarily misconfigured.
     const ip = getClientIp(request);
-    const rl = checkRateLimit({
+    const rl = await checkRateLimit({
       bucket: "register",
       key: ip,
       limit: RATE_LIMITS.register.limit,
@@ -46,15 +48,17 @@ export async function POST(request: NextRequest) {
       const verify = await verifyCaptchaToken(captchaToken, ip);
       if (!verify.ok) {
         if (verify.reason === "not-configured-production") {
-          console.error(
-            "[register] HCAPTCHA_SECRET missing in production — registration refused.",
-          );
+          logger.error({
+            event: "register.captcha_not_configured",
+            msg: "HCAPTCHA_SECRET missing in production — registration refused",
+            requestId,
+          });
           return NextResponse.json(
             {
               error:
                 "Registration is temporarily unavailable. Please contact support.",
             },
-            { status: 500 },
+            { status: 500, headers: { "x-request-id": requestId } },
           );
         }
         return NextResponse.json(
@@ -134,10 +138,15 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
-    console.error("Registration error:", error);
+    logger.error({
+      event: "register.unhandled_error",
+      msg: "Register route threw an unhandled error",
+      requestId,
+      error,
+    });
     return NextResponse.json(
       { error: "Registration failed. Please try again." },
-      { status: 500 }
+      { status: 500, headers: { "x-request-id": requestId } },
     );
   }
 }

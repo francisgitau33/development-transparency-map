@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
+import { logger, newRequestId } from "@/lib/logger";
 
 export async function GET() {
+  const requestId = newRequestId();
   try {
     const session = await getSession();
 
@@ -52,7 +54,15 @@ export async function GET() {
       authenticated: true,
     });
   } catch (error) {
-    console.error("Session error:", error);
-    return NextResponse.json({ user: null, authenticated: false });
+    logger.error({
+      event: "session.unhandled_error",
+      msg: "Session route threw an unhandled error",
+      requestId,
+      error,
+    });
+    return NextResponse.json(
+      { user: null, authenticated: false },
+      { headers: { "x-request-id": requestId } },
+    );
   }
 }

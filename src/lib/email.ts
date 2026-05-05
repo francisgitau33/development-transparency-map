@@ -50,14 +50,12 @@ export async function sendEmail(input: SendEmailInput): Promise<void> {
   if (provider === "console") {
     // Development-only fallback. Never reached in production unless the
     // operator has explicitly set EMAIL_PROVIDER=console.
-    /* eslint-disable no-console */
     console.log("\n========================================");
     console.log("[email:console] Outgoing email (dev only)");
     console.log("To:      ", input.to);
     console.log("Subject: ", input.subject);
     console.log(`Body:\n${input.text}`);
     console.log("========================================\n");
-    /* eslint-enable no-console */
     return;
   }
 

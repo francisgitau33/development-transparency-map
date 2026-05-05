@@ -1,43 +1,62 @@
 /**
- * Unit tests for the rate-limit helper (see Prompt 6 · Part B).
+ * Unit tests for the rate-limit helper (Sprint 1 hardening).
  *
- * We treat the module as an opaque fixed-window token bucket. Tests exercise
- * the public surface only:
- *   - `checkRateLimit` allows under-limit requests.
- *   - Separate buckets / keys are counted independently.
- *   - Over-limit requests are refused.
- *   - Refused requests carry enough state (remaining, resetInMs, limit) to
- *     produce a 429 response.
- *   - `rateLimitedResponse` builds a 429 with a neutral message and
- *     `Retry-After` header.
- *   - Window reset behaviour via fake timers.
- *   - `getClientIp` uses x-forwarded-for / x-real-ip fallbacks.
+ * Coverage:
+ *   - In-memory path:
+ *     - `checkRateLimit` allows under-limit requests
+ *     - Separate buckets / keys are counted independently
+ *     - Over-limit requests are refused (success=false, resetInMs>0)
+ *     - Window reset behaviour under fake timers
+ *   - Upstash REST path:
+ *     - Allowed when count ≤ limit
+ *     - Blocked when count > limit
+ *     - Backend is reported as "redis"
+ *   - Fallback path:
+ *     - When Upstash `fetch` throws, the limiter falls back to in-memory
+ *       and the call still returns a decision (does NOT throw)
+ *   - `rateLimitedResponse` returns a 429 with neutral wording +
+ *     `Retry-After` header, never leaks account existence
+ *   - `getClientIp` uses x-forwarded-for / x-real-ip fallbacks
  *
- * `__resetRateLimitStoreForTests` is exported for hermetic isolation between
- * tests inside this file; we call it in `beforeEach`.
+ * `__resetRateLimitStoreForTests` and `__setRateLimitFetchForTests` are
+ * exported for hermetic isolation between tests; we call them in
+ * `beforeEach` / `afterEach`.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   __resetRateLimitStoreForTests,
+  __setRateLimitFetchForTests,
   RATE_LIMITS,
   checkRateLimit,
   getClientIp,
   rateLimitedResponse,
 } from "./rate-limit";
 
+const ORIGINAL_ENV = { ...process.env };
+
 beforeEach(() => {
   __resetRateLimitStoreForTests();
+  __setRateLimitFetchForTests(null);
+  // Default to "memory" backend for the in-memory tests.
+  process.env.RATE_LIMIT_BACKEND = "memory";
+  process.env.UPSTASH_REDIS_REST_URL = "";
+  process.env.UPSTASH_REDIS_REST_TOKEN = "";
 });
 
 afterEach(() => {
   vi.useRealTimers();
+  // Restore env so we don't leak between files.
+  for (const k of Object.keys(process.env)) {
+    if (!(k in ORIGINAL_ENV)) process.env[k] = "";
+  }
+  Object.assign(process.env, ORIGINAL_ENV);
 });
 
-describe("checkRateLimit", () => {
-  it("allows up to `limit` requests in the window", () => {
+describe("checkRateLimit (in-memory)", () => {
+  it("allows up to `limit` requests in the window", async () => {
     for (let i = 0; i < 3; i++) {
-      const r = checkRateLimit({
+      const r = await checkRateLimit({
         bucket: "t",
         key: "1.2.3.4",
         limit: 3,
@@ -46,14 +65,20 @@ describe("checkRateLimit", () => {
       expect(r.success).toBe(true);
       expect(r.remaining).toBe(3 - 1 - i);
       expect(r.limit).toBe(3);
+      expect(r.backend).toBe("memory");
     }
   });
 
-  it("blocks the next request once the limit is exhausted", () => {
+  it("blocks the next request once the limit is exhausted", async () => {
     for (let i = 0; i < 3; i++) {
-      checkRateLimit({ bucket: "t", key: "1.2.3.4", limit: 3, windowMs: 1000 });
+      await checkRateLimit({
+        bucket: "t",
+        key: "1.2.3.4",
+        limit: 3,
+        windowMs: 1000,
+      });
     }
-    const denied = checkRateLimit({
+    const denied = await checkRateLimit({
       bucket: "t",
       key: "1.2.3.4",
       limit: 3,
@@ -65,12 +90,16 @@ describe("checkRateLimit", () => {
     expect(denied.limit).toBe(3);
   });
 
-  it("counts distinct keys independently", () => {
+  it("counts distinct keys independently", async () => {
     for (let i = 0; i < 3; i++) {
-      checkRateLimit({ bucket: "t", key: "ip-A", limit: 3, windowMs: 1000 });
+      await checkRateLimit({
+        bucket: "t",
+        key: "ip-A",
+        limit: 3,
+        windowMs: 1000,
+      });
     }
-    // ip-A is now exhausted. ip-B must still succeed.
-    const other = checkRateLimit({
+    const other = await checkRateLimit({
       bucket: "t",
       key: "ip-B",
       limit: 3,
@@ -80,16 +109,16 @@ describe("checkRateLimit", () => {
     expect(other.remaining).toBe(2);
   });
 
-  it("counts distinct buckets independently", () => {
+  it("counts distinct buckets independently", async () => {
     for (let i = 0; i < 2; i++) {
-      checkRateLimit({
+      await checkRateLimit({
         bucket: "login",
         key: "ip-A",
         limit: 2,
         windowMs: 1000,
       });
     }
-    const login = checkRateLimit({
+    const login = await checkRateLimit({
       bucket: "login",
       key: "ip-A",
       limit: 2,
@@ -97,7 +126,7 @@ describe("checkRateLimit", () => {
     });
     expect(login.success).toBe(false);
 
-    const register = checkRateLimit({
+    const register = await checkRateLimit({
       bucket: "register",
       key: "ip-A",
       limit: 2,
@@ -106,14 +135,14 @@ describe("checkRateLimit", () => {
     expect(register.success).toBe(true);
   });
 
-  it("resets the window after windowMs has elapsed", () => {
+  it("resets the window after windowMs has elapsed", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2025, 0, 1, 0, 0, 0));
 
     for (let i = 0; i < 2; i++) {
-      checkRateLimit({ bucket: "w", key: "k", limit: 2, windowMs: 1000 });
+      await checkRateLimit({ bucket: "w", key: "k", limit: 2, windowMs: 1000 });
     }
-    const blocked = checkRateLimit({
+    const blocked = await checkRateLimit({
       bucket: "w",
       key: "k",
       limit: 2,
@@ -121,9 +150,8 @@ describe("checkRateLimit", () => {
     });
     expect(blocked.success).toBe(false);
 
-    // Advance past the window.
     vi.advanceTimersByTime(1001);
-    const allowed = checkRateLimit({
+    const allowed = await checkRateLimit({
       bucket: "w",
       key: "k",
       limit: 2,
@@ -134,11 +162,112 @@ describe("checkRateLimit", () => {
   });
 
   it("RATE_LIMITS preset values match the documented policy", () => {
-    // These are the numbers surfaced in the completion report and docs.
     expect(RATE_LIMITS.login).toEqual({ limit: 10, windowMs: 60_000 });
     expect(RATE_LIMITS.register).toEqual({ limit: 10, windowMs: 60_000 });
     expect(RATE_LIMITS.forgotPassword).toEqual({ limit: 3, windowMs: 60_000 });
     expect(RATE_LIMITS.upload).toEqual({ limit: 5, windowMs: 60_000 });
+  });
+});
+
+describe("checkRateLimit (Upstash REST)", () => {
+  beforeEach(() => {
+    process.env.RATE_LIMIT_BACKEND = "auto";
+    process.env.UPSTASH_REDIS_REST_URL = "https://example.upstash.io";
+    process.env.UPSTASH_REDIS_REST_TOKEN = "test-token";
+  });
+
+  it("allows a request when the Upstash counter is within the limit", async () => {
+    const calls: Array<{ input: string; body: unknown }> = [];
+    __setRateLimitFetchForTests(async (input, init) => {
+      calls.push({ input, body: init?.body ? JSON.parse(init.body) : null });
+      return {
+        ok: true,
+        status: 200,
+        json: async () => [
+          { result: 2 }, // INCR → count = 2
+          { result: 1 }, // PEXPIRE NX
+          { result: 58_000 }, // PTTL in ms
+        ],
+      };
+    });
+
+    const r = await checkRateLimit({
+      bucket: "login",
+      key: "ip-A",
+      limit: 5,
+      windowMs: 60_000,
+    });
+    expect(r.success).toBe(true);
+    expect(r.backend).toBe("redis");
+    expect(r.remaining).toBe(3);
+    expect(r.resetInMs).toBe(58_000);
+
+    // Sanity-check the pipeline shape.
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.input).toBe("https://example.upstash.io/pipeline");
+    expect(calls[0]?.body).toEqual([
+      ["INCR", "rl:login:ip-A"],
+      ["PEXPIRE", "rl:login:ip-A", "60000", "NX"],
+      ["PTTL", "rl:login:ip-A"],
+    ]);
+  });
+
+  it("blocks a request once the Upstash counter exceeds the limit", async () => {
+    __setRateLimitFetchForTests(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => [{ result: 11 }, { result: 0 }, { result: 42_000 }],
+    }));
+
+    const r = await checkRateLimit({
+      bucket: "login",
+      key: "ip-A",
+      limit: 10,
+      windowMs: 60_000,
+    });
+    expect(r.success).toBe(false);
+    expect(r.backend).toBe("redis");
+    expect(r.remaining).toBe(0);
+    expect(r.resetInMs).toBe(42_000);
+  });
+
+  it("falls back to in-memory when Upstash fetch fails", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    __setRateLimitFetchForTests(async () => {
+      throw new Error("network unreachable");
+    });
+
+    const r = await checkRateLimit({
+      bucket: "login",
+      key: "ip-A",
+      limit: 2,
+      windowMs: 1000,
+    });
+    expect(r.success).toBe(true);
+    expect(r.backend).toBe("memory");
+    expect(r.remaining).toBe(1);
+    expect(warn).toHaveBeenCalledTimes(1);
+    // Warn payload must not include the raw request body or any secret.
+    const warnArg = String(warn.mock.calls[0]?.[0] ?? "");
+    expect(warnArg).toMatch(/rate_limit.redis_fallback/);
+    expect(warnArg).not.toMatch(/test-token/);
+
+    warn.mockRestore();
+  });
+
+  it("RATE_LIMIT_BACKEND=redis without env vars throws immediately", async () => {
+    process.env.RATE_LIMIT_BACKEND = "redis";
+    process.env.UPSTASH_REDIS_REST_URL = "";
+    process.env.UPSTASH_REDIS_REST_TOKEN = "";
+
+    await expect(
+      checkRateLimit({
+        bucket: "login",
+        key: "ip-A",
+        limit: 5,
+        windowMs: 60_000,
+      }),
+    ).rejects.toThrow(/RATE_LIMIT_BACKEND=redis/);
   });
 });
 
@@ -149,6 +278,7 @@ describe("rateLimitedResponse", () => {
       remaining: 0,
       resetInMs: 4200,
       limit: 5,
+      backend: "memory",
     });
     expect(res.status).toBe(429);
     expect(res.headers.get("Retry-After")).toBe("5");
@@ -157,7 +287,6 @@ describe("rateLimitedResponse", () => {
 
     const body = await res.json();
     expect(body.error).toMatch(/too many requests/i);
-    // Must not leak whether an account exists, etc.
     expect(String(body.error).toLowerCase()).not.toMatch(
       /email|account|user|password|login|register/,
     );
@@ -169,6 +298,7 @@ describe("rateLimitedResponse", () => {
       remaining: 0,
       resetInMs: 1,
       limit: 5,
+      backend: "memory",
     });
     expect(res.headers.get("Retry-After")).toBe("1");
   });

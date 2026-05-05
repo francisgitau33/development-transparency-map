@@ -10,6 +10,7 @@ import {
   RATE_LIMITS,
   rateLimitedResponse,
 } from "@/lib/rate-limit";
+import { getOrCreateRequestId, logger } from "@/lib/logger";
 
 /**
  * Canonical CSV header set accepted by the upload route.
@@ -87,6 +88,7 @@ interface RowError {
 }
 
 export async function POST(request: NextRequest) {
+  const requestId = getOrCreateRequestId(request.headers);
   try {
     const session = await getSession();
     if (!session) {
@@ -95,7 +97,7 @@ export async function POST(request: NextRequest) {
 
     // Per-user upload rate limit. Falls back to IP if no user context —
     // which should not happen post-auth but we defend in depth.
-    const uploadRl = checkRateLimit({
+    const uploadRl = await checkRateLimit({
       bucket: "upload",
       key: session.userId || getClientIp(request),
       limit: RATE_LIMITS.upload.limit,
@@ -432,7 +434,13 @@ export async function POST(request: NextRequest) {
           data: { status: "COMPLETED" },
         });
       } catch (error) {
-        console.error("Bulk insert error:", error);
+        logger.error({
+          event: "upload.bulk_insert_failed",
+          msg: "Bulk insert of uploaded rows failed",
+          requestId,
+          ctx: { uploadJobId: uploadJob.id },
+          error,
+        });
         await prisma.uploadJob.update({
           where: { id: uploadJob.id },
           data: { status: "FAILED" },
@@ -470,15 +478,21 @@ export async function POST(request: NextRequest) {
       errors: errorRows,
     });
   } catch (error) {
-    console.error("Upload error:", error);
+    logger.error({
+      event: "upload.unhandled_error",
+      msg: "Upload route threw an unhandled error",
+      requestId,
+      error,
+    });
     return NextResponse.json(
       { error: "Upload failed. Please try again." },
-      { status: 500 }
+      { status: 500, headers: { "x-request-id": requestId } },
     );
   }
 }
 
 export async function GET(request: NextRequest) {
+  const requestId = getOrCreateRequestId(request.headers);
   try {
     const session = await getSession();
     if (!session) {
@@ -512,10 +526,15 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ uploadJobs });
   } catch (error) {
-    console.error("Get upload jobs error:", error);
+    logger.error({
+      event: "upload.list_failed",
+      msg: "Failed to fetch upload history",
+      requestId,
+      error,
+    });
     return NextResponse.json(
       { error: "Failed to fetch upload history" },
-      { status: 500 }
+      { status: 500, headers: { "x-request-id": requestId } },
     );
   }
 }

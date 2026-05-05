@@ -761,10 +761,10 @@ function formatPercent(value: number | null | undefined, digits = 0): string {
 /**
  * Recharts `Formatter` signature widened: Recharts types `value` as
  * `ValueType | undefined` where `ValueType = number | string | Array<...>`.
- * Casting at the call-sites keeps the rest of the file readable.
+ * Widening to `unknown` + typed casts at the call-sites keeps the rest
+ * of the file readable without resorting to `any`.
  */
-// biome-ignore lint/suspicious/noExplicitAny: Recharts formatter compatibility
-type TooltipFormatter = (v: any, n: any) => [string, string];
+type TooltipFormatter = (v: unknown, n: unknown) => [string, string];
 
 const currencyTooltipFormatter =
   (label: string): TooltipFormatter =>
